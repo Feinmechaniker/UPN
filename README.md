@@ -11,5 +11,5 @@ erfolgt über den Boris-Commander.
 
 ## Kommando
 - 0xAA		- *connect* verbidet den Taschenrechner mit dem PC
-- 0x52 		- *read* list den Programmspeicher des Taschenrechners
+- 0x52 		- *read* liest den Programmspeicher des Taschenrechners
 - 0x53		- *write* schreibt den Programmspeicher des Taschenrechners
