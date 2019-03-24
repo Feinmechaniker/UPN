@@ -71,14 +71,12 @@ int is_comment(char *line) {
 }
 
 
-
 // --------------------------------------------------
 // Welche Kommandos brauchen eine Adresse ?
 int needs_adress(char code) {
- if (code ==  7 || code == 8 || code == 10 || code == 11 || code == 74 || code == 75 || code == 76) return 1;
+ if (code ==  7 || code == 8 || code == 10 || code == 11 || code == 18 || code == 19 || code == 20 || code == 21 || code == 69 || code == 74 || code == 75 || code == 76 || code == 112) return 1;
  return 0;
 }
-
 
 // --------------------------------------------------
 // Kommandocodes umsetzen
