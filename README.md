@@ -2,15 +2,15 @@ UPN Taschenrechner BORIS
 ========================
 
 Das Projekt basiert auf dem Entwurf eines UPN Taschenrechners von 
-Gero.G (www.srswift.de). Dieser Taschenrechner wurde um eine 
+Gero.D (www.srswift.de). Dieser Taschenrechner wurde um eine 
 UART-Schnittstelle erweitert, um von einem PC externe Programme zu 
 laden oder Programme vom Taschenrechner zu sichern. Die Steuerung 
-erfolgt über den Boris-Commander (BC.exe). Kritik, Vorschläge
-und Erweiterungen können unter: 
+erfolgt Ã¼ber den Boris-Commander (BC.exe). Kritik, VorschlÃ¤ge
+und Erweiterungen kÃ¶nnen unter: 
 https://www.mikrocontroller.net/topic/465853?goto=new#new 
 diskutiert werden.
 
-# verfügbare Kommandos zur Steuerung des Taschenrechners über UART
+# verfÃ¼gbare Kommandos zur Steuerung des Taschenrechners Ã¼ber UART
 
 ## Kommando
 - 0xAA		- *connect* verbidet den Taschenrechner mit dem PC
