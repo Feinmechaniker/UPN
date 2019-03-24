@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<Configuration>
+  <frmLoader>
+    <ShowCmd>1</ShowCmd>
+    <Flags>0</Flags>
+    <PixelsPerInch>96</PixelsPerInch>
+    <MinMaxPos_1920x1080_>-1,-1,-1,-1</MinMaxPos_1920x1080_>
+    <MinMaxPos>-1,-1,-1,-1</MinMaxPos>
+    <NormPos_1920x1080_>584,406,1084,681</NormPos_1920x1080_>
+    <NormPos>584,406,1084,681</NormPos>
+    <cboCOM_ItemIndex>13</cboCOM_ItemIndex>
+    <cboBaud_ItemIndex>2</cboBaud_ItemIndex>
+    <dlgOpen_InitialDir>B:\Projekte\10_Schaltungen\15 UPN\Bascom\BIN</dlgOpen_InitialDir>
+    <dlgOpen_FileName>B:\Projekte\10_Schaltungen\15 UPN\Bascom\BIN\rpn_boris_A328_v2.14.bin</dlgOpen_FileName>
+    <mnuProgress_Down>FALSE</mnuProgress_Down>
+  </frmLoader>
+</Configuration>
