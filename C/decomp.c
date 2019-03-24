@@ -36,7 +36,7 @@ int needs_adress(char code) {
 
 // STO und RCL sind Speicherbefehle und brauchen eine Adresse 0..31
 int needs_mem_adress(char code) {
- if (code ==  7 || code == 8) return 1;
+ if (code ==  7 || code == 8 || code == 18 || code == 19 || code == 20 || code == 21) return 1;
  return 0;
 }
 
