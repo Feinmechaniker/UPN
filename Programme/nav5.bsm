@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Programm nav5.bor
 # Verwendete Speicher: 
 #  0  Fluggeschwindigkeit in km/h (vorgegeben)
@@ -120,3 +121,127 @@
     NOP
     NOP
     NOP
+=======
+# Programm nav5.bor
+# Verwendete Speicher: 
+#  0  Fluggeschwindigkeit in km/h (vorgegeben)
+#  1  Windgeschwindigkeit in Knoten (vorgegeben)
+#  2  Windrichtung lt. APIS (vorgegeben)
+#  3  Kurs laut Planung (Eingabewert in der Schleife)
+#  4  Flugstrecke in km (Eingabewert in der Schleife)
+#  5  Vorhaltewinkel
+#  6  Wind in km/h
+#  7  Umrechnung km - Knoten (entsteht)
+#
+#  Eingabe:
+#  Kartenkurs 
+#    ENTER
+#  Flugstrecke in km 
+#    RUN
+#
+#  Ausgabe: 
+#  zu fliegender Kurs
+#    X<->Y
+#  Flugzeit in Minuten
+#
+000 FIX 1  Umschalten auf Fixpunkt-Darstellung
+    1
+    .
+    8
+    5
+    1
+    9
+    STO 7
+    RCL 1
+    *
+    STO 6
+    RCL 0
+    -
+    X>0 68
+    CX
+015 HALT
+    STO 4
+    X<->Y
+    STO 3
+    RCL 2 Eingabe gegen Windrichtung pruefen
+    -
+    X=0 72
+    RCL 3
+    1
+    8
+    0
+    -
+    RCL 2
+    -
+    X=0 72
+    3
+    6
+    0
+    +
+    X=0 72
+035 RCL 3
+    RCL 2
+    X<->Y
+    -
+    ENTER
+    ENTER
+    SIN
+    RCL 6
+    *
+    RCL 0
+    /
+    ASIN
+    STO 5
+    -
+    SIN
+    X<->Y
+    SIN
+    /
+    RCL 0
+    *
+    RCL 3
+    RCL 5
+    +
+    X<->Y
+    RCL 4
+    X<->Y
+    /
+    6
+    0
+    *
+    X<->Y
+    GOTO 15
+    NOP
+068 CX
+    /
+    HALT
+    GOTO 0
+072 0
+    .
+    0
+    1
+    STO+ 3
+    GOTO 35
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+>>>>>>> 9b0ad6c33e46989ef11c9dfd4845070001314977
