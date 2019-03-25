@@ -86,6 +86,7 @@ unsigned short get_cmd_cde(char * code) {
   for(i=0;i<128;i++) {
      if (!strcmp(code, kdo_codes[i])) return i;
   }
+  fprintf(stderr, "ERROR: Kommando >%s< kann nicht uebersetzt werden\n", code);
   return 255;
 }
 
@@ -108,29 +109,36 @@ void main(int argc, char ** argv[]) {
      ch = 0;
      // Nur mit Argument starten 
      if(argc!=2) {
-         printf("Bittschoen : %s <sourcefile> > <binaerfile> \n",argv[0]);
+         fprintf(stderr, "Bittschoen : %s <sourcefile> > <binaerfile> \n",argv[0]);
      } else {
          file=fopen((const char *)argv[1], "r");
          if(file==NULL)
-             printf("Fehler beim Oeffnen der Datei");
+             fprintf(stderr, "ERROR: Fehler beim Oeffnen der Datei %s\n", argv[1]);
           else {
              while (fgets(s, 255, file) != NULL) {
                 if (!is_comment(line)) {
                    if (isWspace (line[0])){
                       i = sscanf(s, " %s %d", &kdo, &adresse);
+                      i++;
                    } else {
                       i = sscanf(s, "%d %s %d", &zeile, &kdo, &adresse);
                    }
+                   
                    a++;
                    code = get_cmd_cde(kdo);
                    if (!needs_adress(code)) {
+                      i++;
                       adresse = 0;
                    }
-                   printf("%c%c", code, (char) adresse);
+                   if (i != 3) {
+                      fprintf(stderr, "ERROR: Parameterfehler >%s< \n", line);
+                   } else {
+                      printf("%c%c", code, (char) adresse);
+                   }
                 }
              }
 
-             while (a < 255) {
+             while (a < 100) {
                    printf("%c%c", 0, 0);
                    a++;
              }
