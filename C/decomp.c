@@ -70,6 +70,7 @@ void prep_marke(char * marke, int flag, int a) {
 char * get_cmd_str(char code) {
   if (code > 127 || code < 0) return (char *) NULL;
   if (code < 128 && strlen(kdo_codes[code]) > 0) return kdo_codes[code];
+  fprintf(stderr, "ERROR: code %d kann nicht uebersetzt werden\n", code);
   return (char *) NULL;
 }
 
@@ -101,11 +102,11 @@ void main(int argc, char ** argv[])
      a = 0;
      ch = 0;
      if(argc!=2) {
-         printf("Bitteschoen: %s <binaerdatei> > <sourcedatei>\n",argv[0]);
+         fprintf(stderr, "Bitteschoen: %s <binaerdatei> > <sourcedatei>\n",argv[0]);
      } else {
          file=fopen((const char *)argv[1], "r"); 
          if(file==NULL)
-             printf("Fehler beim Oeffnen der Datei");
+             fprintf(stderr, "ERROR: Fehler beim Oeffnen der Datei %s\n", argv[1]);
           else {
              // Erst mal nur nach Adressen suchen
              while (ch != EOF) {
