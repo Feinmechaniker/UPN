@@ -1,0 +1,14 @@
+This is the scource code for a small Assembler / disassembler for BORIS programs.
+
+It can be compiled using either gcc or VisualC
+
+Both are command line tools, usage is :
+
+comp infile.bsm > outfile.bor
+decomp infile.bor > outfile.bsm
+
+Initial version is compatible with 
+- boris v 2.15
+- BCommander 
+
+Remark: EEPROM dumps of the ATMega EEPROM have a swapped byte order!
