@@ -46,9 +46,9 @@ int needs_param(char code) {
  return 0;
 }
 
-// GOTO, GOSUB, IF* sind steuerbefehle und brauchen eine Adresse von 0.255
+// GOTO, GOSUB, IF*i, END sind steuerbefehle und brauchen eine Adresse von 0.255
 int needs_prog_adress(char code) {
- if (code == 10 || code == 11 || code == 74 || code == 75 || code == 76) return 1;
+ if (code == 10 || code == 11 || code == 74 || code == 75 || code == 76 || code == 126) return 1;
  return 0;
 }
 
@@ -135,8 +135,10 @@ void main(int argc, char ** argv[])
                 prep_marke(marke, used_prog[a], a);                
                 if (ch != EOF && adresse != EOF && kdo != NULL) {
                    if ( needs_adress(ch)) {
+                      // printf ("%s %s %d\t; %02x %02x\n", marke, kdo, adresse, ch, adresse);
                       printf ("%s %s %d\n", marke, kdo, adresse);
                    } else {
+                      // printf ("%s %s\t; %02x %02x\n", marke, kdo, ch, 0);
                       printf ("%s %s\n", marke, kdo);
                    }
                    a++; 
