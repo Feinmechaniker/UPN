@@ -21,8 +21,13 @@
 *
 * **************************************************************************** */
 
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #include "boris.h"
+
 
 unsigned short get_cmd_cde(char * code);
 int needs_adress(char code);
@@ -74,7 +79,7 @@ int is_comment(char *line) {
 // --------------------------------------------------
 // Welche Kommandos brauchen eine Adresse ?
 int needs_adress(char code) {
- if (code ==  7 || code == 8 || code == 10 || code == 11 || code == 18 || code == 19 || code == 20 || code == 21 || code == 69 || code == 74 || code == 75 || code == 76 || code == 112) return 1;
+ if (code ==  7 || code == 8 || code == 10 || code == 11 || code == 18 || code == 19 || code == 20 || code == 21 || code == 69 || code == 74 || code == 75 || code == 76 || code == 112 || code == 126) return 1;
  return 0;
 }
 
@@ -111,6 +116,9 @@ void main(int argc, char ** argv[]) {
      if(argc!=2) {
          fprintf(stderr, "Bittschoen : %s <sourcefile> > <binaerfile> \n",argv[0]);
      } else {
+#ifdef _WIN32
+         _setmode(_fileno(stdout), _O_BINARY);
+#endif
          file=fopen((const char *)argv[1], "r");
          if(file==NULL)
              fprintf(stderr, "ERROR: Fehler beim Oeffnen der Datei %s\n", argv[1]);
@@ -136,6 +144,12 @@ void main(int argc, char ** argv[]) {
                       printf("%c%c", code, (char) adresse);
                    }
                 }
+             }
+
+             // END Marke schreiben
+             if (a < 100 && code != 126) {
+                   printf("%c%c", 126, a);
+                   a++;
              }
 
              while (a < 100) {
