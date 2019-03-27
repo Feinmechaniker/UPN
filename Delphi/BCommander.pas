@@ -28,6 +28,7 @@
 { 20.03.19  V. 00.1 Startversion                                               }
 { 21.03.19  V. 00.2 Dateiarbeit                                                }
 { 22.03.19  V. 00.3 Disassembler                                               }
+{ 27.03.19  V. 00.4 Disassembler erweitert, Dezimaldarstellung                 }
 {------------------------------------------------------------------------------}
 
 
@@ -332,9 +333,10 @@ end;
 //------------------------------------------------------------------------------
 procedure TForm1.Button7Click(Sender: TObject);
 Var
-  i,j : Word;                                                          // Index
-  temp : String;
+  i,j   : Word;                                                        // Index
+  temp  : String;
   Index : Byte;                                     // Index im Befehlsspeicher
+  Adr   : Byte;                                                      // Adresse
 
 begin
  if Button7.Caption = 'ASM' then                        // Button steht auf ASM
@@ -342,7 +344,7 @@ begin
     j := 0;                                                        // Index = 0
     for i := 1 to (DatL div 2) do                  // bis ende Programmspeicher
      begin
-      StringGrid1.Cells[0,i] := Format('%.2x',[i-1]);             // PC-Counter
+      StringGrid1.Cells[0,i] := Format('%d',[i-1]);       // PC-Counter dezimal
       temp := Daten_S[j+1] + Daten_S[j+2];                        // Code holen
       Index := HexToBin(temp);                     // Code in Binärwert wandeln
       StringGrid1.Cells[1,i] := Befehl[Index];                 // Code anzeigen
@@ -355,13 +357,16 @@ begin
          (Index=75) OR                                                   // X=0
          (Index=76) then                                                 // X<0
       begin
-       StringGrid1.Cells[2,i] := Daten_S[j+3] + Daten_S[j+4];         // Adresse
-       TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];      // Adresse in Speicher
+       temp := Daten_S[j+3] + Daten_S[j+4];                    // Adresse holen
+       Adr := HexToBin(temp);                   // Adresse in Binärwert wandeln
+       StringGrid1.Cells[2,i] := Format('%.2d',[Adr]);       // Adresse dezimal
+//    StringGrid1.Cells[2,i] := Daten_S[j+3] + Daten_S[j+4];         // Adresse
+//    TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];      // Adresse in Speicher
       end
       else                                            // keine Adresse anzeigen
        begin
        StringGrid1.Cells[2,i] := '';         // Adresse
-       TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];      // Adresse in Speicher
+       TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];     // Adresse in Speicher
        end;
       j := j+4;
      end; // for i := 0
@@ -568,7 +573,11 @@ begin
  Befehl[14] := 'HALT';
  Befehl[15] := 'CX';
  Befehl[16] := 'X^Y';
- Befehl[17] := 'X-Y';
+ Befehl[17] := 'X<->Y';
+ Befehl[18] := 'STO+';
+ Befehl[19] := 'STO-';
+ Befehl[20] := 'STO*';
+ Befehl[21] := 'STO/';
  Befehl[48] := '0';
  Befehl[49] := '1';
  Befehl[50] := '2';
@@ -579,7 +588,7 @@ begin
  Befehl[55] := '7';
  Befehl[56] := '8';
  Befehl[57] := '9';
- Befehl[65] := 'DIM';
+ Befehl[65] := 'DIMM';
  Befehl[66] := 'CHS';
  Befehl[67] := 'RND';
  Befehl[68] := '1/X';
@@ -589,7 +598,7 @@ begin
  Befehl[74] := 'X>0';
  Befehl[75] := 'X=0';
  Befehl[76] := 'X<0';
- Befehl[77] := 'e^X';
+ Befehl[77] := 'E^X';
  Befehl[78] := 'PRG';
  Befehl[79] := 'NOP';
  Befehl[80] := 'PI';

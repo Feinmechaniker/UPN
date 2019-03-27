@@ -1,10 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <BorlandProject>
 	<Transactions>
-    <Transaction>1899.12.30 00:00:00.000.868,B:\Projekte\10_Schaltungen\15 UPN\Delphi\Test\ComMainForm.pas=B:\Projekte\10_Schaltungen\15 UPN\Delphi\BCommander.pas</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.868,B:\Projekte\10_Schaltungen\15 UPN\Delphi\Test\ComMainForm.dfm=B:\Projekte\10_Schaltungen\15 UPN\Delphi\BCommander.dfm</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.868,B:\Projekte\10_Schaltungen\15 UPN\Delphi\BCommander.dfm=B:\Projekte\10_Schaltungen\15 UPN\Delphi\Test\ComMainForm.dfm</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.868,B:\Projekte\10_Schaltungen\15 UPN\Delphi\BCommander.pas=B:\Projekte\10_Schaltungen\15 UPN\Delphi\Test\ComMainForm.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.148,B:\Projekte\10_Schaltungen\15 UPN\Delphi\Boris.dproj=B:\Projekte\10_Schaltungen\15 UPN\Delphi\BC.dproj</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.374,B:\Projekte\10_Schaltungen\15 UPN\Delphi\Boris.dproj=B:\Projekte\10_Schaltungen\15 UPN\Delphi\Test\ComExample.dproj</Transaction>
     <Transaction>1899.12.30 00:00:00.000.098,B:\Projekte\10_Schaltungen\15 UPN\Delphi\Boris.dproj=B:\Projekte\10_Schaltungen\15 UPN\Delphi\Boris.dproj</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.374,B:\Projekte\10_Schaltungen\15 UPN\Delphi\Test\ComExample.dproj=B:\Projekte\10_Schaltungen\15 UPN\Delphi\Boris.dproj</Transaction>
-    <Transaction>1899.12.30 00:00:00.000.148,B:\Projekte\10_Schaltungen\15 UPN\Delphi\BC.dproj=B:\Projekte\10_Schaltungen\15 UPN\Delphi\Boris.dproj</Transaction>
   </Transactions>
 </BorlandProject>
