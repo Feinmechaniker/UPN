@@ -29,6 +29,7 @@
 { 21.03.19  V. 00.2 Dateiarbeit                                                }
 { 22.03.19  V. 00.3 Disassembler                                               }
 { 27.03.19  V. 00.4 Disassembler erweitert, Dezimaldarstellung                 }
+{ 28.03.19  V. 00.5 Assembler begonnen                                         }
 {------------------------------------------------------------------------------}
 
 
@@ -63,16 +64,20 @@ type
     OpenDialog1: TOpenDialog;
     Button8: TButton;
     Button7: TButton;
+    GroupBox4: TGroupBox;
+    StringGrid2: TStringGrid;
+    Button9: TButton;
+    Button10: TButton;
+    Button11: TButton;
+    Button12: TButton;
     procedure Button_OpenClick(Sender: TObject);
     procedure Button_SettingsClick(Sender: TObject);
-//    procedure Button_SendClick(Sender: TObject);
     procedure ComPortOpen(Sender: TObject);
     procedure ComPortClose(Sender: TObject);
     procedure ComPortRxChar(Sender: TObject; Count: Integer);
     procedure FormShow(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure FormCreate(Sender: TObject);
-    procedure MemoChange(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
@@ -82,6 +87,12 @@ type
     procedure Button6Click(Sender: TObject);
     procedure Button8Click(Sender: TObject);
     procedure StringGrid1Click(Sender: TObject);
+    procedure StringGrid2Click(Sender: TObject);
+    procedure Button10Click(Sender: TObject);
+    procedure Button9Click(Sender: TObject);
+    procedure Button11Click(Sender: TObject);
+    procedure Edit1Change(Sender: TObject);
+    procedure Button12Click(Sender: TObject);
 
   private
     { Private declarations }
@@ -93,22 +104,27 @@ type
   end;
 
 const
-  Mem_max = 200;                                         // maximale Datenlänge
+  Mem_max = 200;                                // maximale Datenlänge (2 Byte)
+  PC_max  = 99;                                            // (Mem_max / 2) - 1
 
 type
-  BefehlsType = Array[0..128] of String[6];
+  BefehlsType = Array[0..127] of String[6];
+  ZahlType    = Array[0..255] of String[3];
 
-  TR_Type = Array[1..2] of String[2];                      // High- und Lowteil
+  Prog_Type = Array[1..2] of String[6];       // Programmcode High- und Lowteil
 
 var
-  Form1   : TForm1;
-  temp    : byte;
-  DatL    : Word;                              // Datenlänge des Empfangsstring
-  Paket   : String;                                      // UART Empfangsstring
-  Daten_H : String;                                    // Programmdaten als HEX
-  Daten_S : String;                                 // Programmdaten als String
-  TR_Dat  : Array[0..99] of TR_Type;                 // Datenspeicher als Array
-  Befehl  : BefehlsType;                                   // Liste der Befehle
+  Form1    : TForm1;
+  temp     : byte;
+  DatL     : Word;                             // Datenlänge des Empfangsstring
+  Paket    : String;                                     // UART Empfangsstring
+  Daten_H  : String;                                   // Programmdaten als HEX
+  Daten_S  : String;                                // Programmdaten als String
+  CDaten_H : Array[0..Mem_Max] of Char;// compilierte Programmdaten in HEX-Form
+//  CDaten_H : String;// compilierte Programmdaten in HEX-Form
+  Prog_Dat : Array[0..PC_max] of Prog_Type;                     // Programmcode
+  Befehl   : BefehlsType;                                  // Liste der Befehle
+  Zahl     : ZahlType;                            // Liste der möglichen Zahlen
 
 implementation
 
@@ -244,15 +260,12 @@ begin
     Label4.Caption := InttoStr(DatL div 2);              // PC-Counter anzeigen
     Daten_H := Paket;                              // Daten aus UART übernehmen
     Daten_S := StringToHex(Daten_H);                        // Datenpaket bauen
-//    Memo.Text := Daten_S + CHR($0D) + CHR($0A);
     j := 0;                                                        // Index = 0
     for i := 1 to (Datl div 2) do                  // bis ende Programmspeicher
      begin
       StringGrid1.Cells[0,i] := InttoStr(i-1);                    // PC-Counter
       StringGrid1.Cells[1,i] := Daten_S[j+1] + Daten_S[j+2];            // Code
-      TR_Dat[i-1,1] := Daten_S[j+1] + Daten_S[j+2];         // Code in Speicher
       StringGrid1.Cells[2,i] := Daten_S[j+3] + Daten_S[j+4];         // Adresse
-      TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];      // Adresse in Speicher
       j := j+4;
      end; // for i := 0
    end; // Dat_L <= Mem_max
@@ -313,15 +326,12 @@ begin
   else                                                      // Daten darstellen
    begin
     Daten_S := StringToHex(Daten_H);                        // Datenpaket bauen
-//    Memo.Text := Daten_S + CHR($0D) + CHR($0A);
     j := 0;                                                        // Index = 0
     for i := 1 to (DatL div 2) do                  // bis ende Programmspeicher
      begin
       StringGrid1.Cells[0,i] := InttoStr(i-1);                    // PC-Counter
       StringGrid1.Cells[1,i] := Daten_S[j+1] + Daten_S[j+2];            // Code
-      TR_Dat[i-1,1] := Daten_S[j+1] + Daten_S[j+2];         // Code in Speicher
       StringGrid1.Cells[2,i] := Daten_S[j+3] + Daten_S[j+4];         // Adresse
-      TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];      // Adresse in Speicher
       j := j+4;
      end; // for i := 0
    end; // else
@@ -347,30 +357,29 @@ begin
       StringGrid1.Cells[0,i] := Format('%d',[i-1]);       // PC-Counter dezimal
       temp := Daten_S[j+1] + Daten_S[j+2];                        // Code holen
       Index := HexToBin(temp);                     // Code in Binärwert wandeln
-      StringGrid1.Cells[1,i] := Befehl[Index];                 // Code anzeigen
-      TR_Dat[i-1,1] := Daten_S[j+1] + Daten_S[j+2];         // Code in Speicher
+      if Index <> 255 then StringGrid1.Cells[1,i] := Befehl[Index]  // Code anzeigen
+       else StringGrid1.Cells[1,i] := '';       // bei 255 (FF) nichts anzeigen
       if (Index=7) OR                                                    // STO
          (Index=8) OR                                                    // RCL
          (Index=10) OR                                                  // GOTO
          (Index=11) OR                                                 // GOSUB
+         (Index=18) OR                                                  // STO+
+         (Index=19) OR                                                  // STO-
+         (Index=20) OR                                                  // STO*
+         (Index=21) OR                                                  // STO/
          (Index=74) OR                                                   // X>0
          (Index=75) OR                                                   // X=0
          (Index=76) then                                                 // X<0
-      begin
+      begin                                      // zusätzlich Adresse anzeigen
        temp := Daten_S[j+3] + Daten_S[j+4];                    // Adresse holen
        Adr := HexToBin(temp);                   // Adresse in Binärwert wandeln
-       StringGrid1.Cells[2,i] := Format('%.2d',[Adr]);       // Adresse dezimal
-//    StringGrid1.Cells[2,i] := Daten_S[j+3] + Daten_S[j+4];         // Adresse
-//    TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];      // Adresse in Speicher
+       StringGrid1.Cells[2,i] := Format('%d',[Adr]);         // Adresse dezimal
       end
-      else                                            // keine Adresse anzeigen
-       begin
-       StringGrid1.Cells[2,i] := '';         // Adresse
-       TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];     // Adresse in Speicher
-       end;
+      else StringGrid1.Cells[2,i] := '';              // keine Adresse anzeigen
       j := j+4;
      end; // for i := 0
    Button7.Caption := 'HEX';                          // Button auf Hex stellen
+   Button11.Enabled := true;                          // Grid überladen möglich
   end // ASM
   else                                                  // Button stand auf Hex
    begin
@@ -379,12 +388,11 @@ begin
      begin
       StringGrid1.Cells[0,i] := InttoStr(i-1);                    // PC-Counter
       StringGrid1.Cells[1,i] := Daten_S[j+1] + Daten_S[j+2];            // Code
-      TR_Dat[i-1,1] := Daten_S[j+1] + Daten_S[j+2];         // Code in Speicher
       StringGrid1.Cells[2,i] := Daten_S[j+3] + Daten_S[j+4];         // Adresse
-      TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];      // Adresse in Speicher
       j := j+4;
      end; // for i := 0
     Button7.Caption := 'ASM';                         // Button auf ASM stellen
+    Button11.Enabled := false;                  // Grid überladen nicht möglich
    end;
 end;
 
@@ -394,7 +402,6 @@ end;
 //------------------------------------------------------------------------------
 procedure TForm1.Button8Click(Sender: TObject);
 var
-  F : Textfile;                                                 // Programmfile
   i,j : Word;                                                          // Index
 begin
  Daten_H := '';
@@ -402,17 +409,13 @@ begin
   Daten_H := Daten_H + CHR(0);
   Daten_S := StringToHex(Daten_H);                          // Datenpaket bauen
  j := 0;                                                           // Index = 0
- for i := 1 to (Mem_max div 2) do                  // bis ende Programmspeicher
+ for i := 0 to PC_max do                           // bis Ende Programmspeicher
   begin
-   StringGrid1.Cells[0,i] := InttoStr(i-1);                       // PC-Counter
-   StringGrid1.Cells[1,i] := Daten_S[j+1] + Daten_S[j+2];               // Code
-   TR_Dat[i-1,1] := Daten_S[j+1] + Daten_S[j+2];            // Code in Speicher
-   StringGrid1.Cells[2,i] := Daten_S[j+3] + Daten_S[j+4];            // Adresse
-   TR_Dat[i-1,2] := Daten_S[j+3] + Daten_S[j+4];         // Adresse in Speicher
+   StringGrid1.Cells[0,i+1] := InttoStr(i);                       // PC-Counter
+   StringGrid1.Cells[1,i+1] := Daten_S[j+1] + Daten_S[j+2];             // Code
+   StringGrid1.Cells[2,i+1] := Daten_S[j+3] + Daten_S[j+4];          // Adresse
    j := j+4;
   end; // for i := 0
-
-
 end;
 
 //------------------------------------------------------------------------------
@@ -486,6 +489,8 @@ begin
   Paket := Paket + Temp_Str;                            // Empfangsstring bauen
   DatL := DatL + Count;                                 // Datenlänge mitzählen
 end;
+
+
 //------------------------------------------------------------------------------
 
 
@@ -518,13 +523,27 @@ begin
   end;
 
  ComPort.DiscardNull := false;  // Null Terminierung bei Strings abschalten !!!
+ Button11.Enabled := false;                     // Grid überladen nicht möglich
+ Button12.Enabled := false;                     // Grid überladen nicht möglich
 
  StringGrid1.ColCount := 3;                                        // 3 Spalten
- StringGrid1.RowCount := (Mem_max div 2)+1;                      // Zeilenlänge
+ StringGrid1.RowCount := PC_max+2;                               // Zeilenlänge
  StringGrid1.Font.Style := [fsBold];
+ StringGrid1.Options := [goFixedVertLine,goFixedHorzLine,goVertLine,goHorzLine,goRangeSelect,GoDrawFocusSelected];
  StringGrid1.Cells[0,0] := 'PC';                                 // Überschrift
  StringGrid1.Cells[1,0] := 'Code';                               // Überschrift
  StringGrid1.Cells[2,0] := 'Adr';                                // Überschrift
+
+ StringGrid2.ColCount := 3;                                        // 3 Spalten
+ StringGrid2.RowCount := PC_max+2;                               // Zeilenlänge
+ StringGrid2.Options := [goFixedVertLine,goFixedHorzLine,goVertLine,goHorzLine,goRangeSelect,
+ GoDrawFocusSelected,GoAlwaysShowEditor,GoEditing,goTabs,goRangeSelect];
+ StringGrid2.Font.Style := [fsBold];
+ StringGrid2.Cells[0,0] := 'PC';                                 // Überschrift
+ StringGrid2.Cells[1,0] := 'Code';                               // Überschrift
+ StringGrid2.Cells[2,0] := 'Adr';                                // Überschrift
+
+
 end;
 
 procedure TForm1.FormShow(Sender: TObject);
@@ -541,22 +560,273 @@ begin
 }
 end;
 
-
+{
 procedure TForm1.MemoChange(Sender: TObject);
 begin
   temp := 1;
 end;
-
-
+}
 
 procedure TForm1.StringGrid1Click(Sender: TObject);
 begin
  temp := 0;
 end;
 
-Procedure Init_Befehle;
+//------------------------------------------------------------------------------
+// Compilermeldungen
+//------------------------------------------------------------------------------
+procedure TForm1.Edit1Change(Sender: TObject);
 begin
- Befehl[0] := 'NOP';
+ temp := 1;
+end;
+
+//------------------------------------------------------------------------------
+// Gitter synchronisieren (HEX-Gitter to Assembler-Gitter
+//------------------------------------------------------------------------------
+procedure TForm1.Button11Click(Sender: TObject);
+Var i,j : Byte;
+begin
+ for i := 0 to 2 do
+   for j := 1 to PC_max+1 do StringGrid2.Cells[i,j] := StringGrid1.Cells[i,j];
+end;
+
+
+//------------------------------------------------------------------------------
+// Gitter synchronisieren (Assembler-Gitter to Hex-Gitter
+//------------------------------------------------------------------------------
+procedure TForm1.Button12Click(Sender: TObject);
+var i : Integer;
+begin
+ Daten_H := '';                                          // alten Daten löschen
+ Daten_S := '';                                          // alten Daten löschen
+ for i := 0 to Mem_max-1 do Daten_H := Daten_H + CDaten_H[i];     // umkopieren
+ DatL := Length(Daten_H);                                    // Länge bestimmen
+ Daten_S := StringToHex(Daten_H);                           // Datenpaket bauen
+ Button7.Click;                                                     // anzeigen
+ Button7.Click;                                                     // anzeigen
+end;
+
+
+//------------------------------------------------------------------------------
+// Test auf Zahl im Code
+//------------------------------------------------------------------------------
+function IF_Number(const Zeichen:String): Byte;
+var
+  i : integer;
+  Flag : Boolean;
+  Str  : String;
+begin
+ Str := '';
+ Flag := false;
+ Result := 1;
+ for i := 1 to length(Zeichen) do                        // nach Ziffern suchen
+  begin
+   if (ord(Zeichen[i]) >= 48) and (ord(Zeichen[i]) <= 57) then
+    begin                                                   // Ziffern gefunden
+     Str := Str + Zeichen[i];
+     Flag := true;
+    end;
+  end; // end for i
+ i := 1000;
+ if Flag then i := StrToInt(Str);                          // Ziffern umwandeln
+ if i < 999 then Result := 0;                   // Zahl < 999 im Code enthalten
+end;
+
+
+//------------------------------------------------------------------------------
+// Scanner für Compilercode (lexigrafische Analyse)
+//------------------------------------------------------------------------------
+procedure Scanner(Zeichen: string ;var Error: Byte);
+var
+  i : Integer;                                                         // Index
+  Error_B,Error_Z : Byte;                                     // Fehlerzustände
+begin
+ i := 0;                                                    // Startwert Befehl
+ repeat
+  Error_B := CompareText(Zeichen,Befehl[i]);                 // Test auf Befehl
+  Inc(i);                                                                // i+1
+ until (Error_B = 0) OR (i > 128);       // kein Fehler oder unbekannter Befehl
+
+ i := 0;
+ repeat
+  Error_Z := CompareText(Zeichen,Zahl[i]);                     // Test auf Zahl
+  Inc(i)
+ until (Error_Z = 0) OR (i > 255);          // kein Fehler oder unbekannte Zahl
+
+ if (Error_B <> 0) AND (Error_Z <> 0) then Error := 1             // Auswertung
+  else Error := 0;                                               // kein Fehler
+end;
+
+//------------------------------------------------------------------------------
+// Syntaxtest für Compilercode
+//------------------------------------------------------------------------------
+procedure Syntax(Code,Adr : String; var  Error: Byte);
+var
+  i : Byte;                                                        // Zählindex
+  Index : Byte;                                   // Position in Befehlstabelle
+begin
+ Error := 1;                                                   // Fehler setzen
+ for i := 0 to 127 do                       // suche Position in Befehlstabelle
+  if CompareText(Code,Befehl[i]) = 0 then Index := i;
+  case Index of
+   0..6,9,12..17,22..73,77..127 : if Adr = '' then Error := 0; // keine Adresse
+   7..8,10..11,18..21,74..76 : if (Adr <> '') AND  (StrToInt(Adr) < 256) then Error := 0; // Adresse vorhanden und im Wertebereich
+  end; // end Case
+ temp := 1;
+end;
+
+//------------------------------------------------------------------------------
+// Code aus geprüftem Quelltext erzeugen
+//------------------------------------------------------------------------------
+procedure Make_Code;
+var
+  i,k : Integer;
+  j,Index,Adr : Byte;
+  temp : String;
+begin
+ i := 0;                                          // für das komplette Programm
+ k := 0;
+ repeat
+  for j := 0 to 127 do                      // suche Position in Befehlstabelle
+   if CompareText(Prog_Dat[i,1],Befehl[j]) = 0 then
+    begin
+     Index := j;
+     Break;                                                // Position gefunden
+    end;
+  CDaten_H[k] := Chr(Index);                         // Code als Byte im String
+  if Prog_Dat[i,2] = '' then Adr := 0                     // wenn keine Adresse
+   else Adr := StrToInt(Prog_Dat[i,2]);               // sonst Adresse als Byte
+  CDaten_H[k+1] := Chr(Adr);                      // Adresse als Byte im String
+  Inc(i);                                                      // PC hochzählen
+  Inc(k,2);                                         // Speicherindex hochzählen
+ until i > PC_max;
+{
+ for i := 0 to Mem_max do
+   begin
+     temp := temp + CDaten_H[i];
+   end;
+}
+end;
+
+//------------------------------------------------------------------------------
+// Compiler Run-Button
+//------------------------------------------------------------------------------
+procedure TForm1.Button9Click(Sender: TObject);
+var
+  i     : Word;                                                        // Index
+  Error1,Error2,Error_Lex : Byte;                                 // Fehlercode
+begin
+ for i := 0 to PC_max do Prog_Dat[i,1] := '';                  // alles löschen
+ for i := 0 to PC_max do Prog_Dat[i,2] := '';
+// Codescann ohne Syntaxprüfung in zwei Schritten (lexigrafische Analyse)
+ i := 0;
+ repeat                                                         // Code scannen
+  // Schritt 1, Codespalte scannen
+  Prog_Dat[i,1] := StringGrid2.Cells[1,i+1];                      // Code lesen
+  Scanner(Prog_Dat[i,1],Error1);                                // Code scannen
+  if Error1 > 0 then                                        // Fehlerbehandlung
+   begin
+    Button12.Enabled := false;                  // Grid überladen nicht möglich
+    Application.MessageBox( PChar('unknown command in line '+ IntToStr(i)), 'Error', 16);
+    StringGrid2.Col := 1;                                      // Spalte setzen
+    StringGrid2.Row := i+1;                         // fehlerhafte Zeile setzen
+    StringGrid2.SetFocus;                                          // Cursor ON
+   end;
+
+  // Schritt 2, Adressspalte scannen
+  Prog_Dat[i,2] := StringGrid2.Cells[2,i+1];                   // Adresse lesen
+  Scanner(Prog_Dat[i,2],Error2);                             // Adresse scannen
+  if Error2 > 0 then                                        // Fehlerbehandlung
+   begin
+    Button12.Enabled := false;                  // Grid überladen nicht möglich
+    Application.MessageBox( PChar('unknown command in line '+ IntToStr(i)), 'Error', 16);
+    StringGrid2.Col := 2;                                      // Spalte setzen
+    StringGrid2.Row := i+1;                         // fehlerhafte Zeile setzen
+    StringGrid2.SetFocus;                                          // Cursor ON
+   end;
+
+  Inc(i);
+  if (Error1 = 1) OR (Error2 = 1) then Error_Lex := 1                 // Fehler
+   else Error_Lex := 0;                                          // kein Fehler
+ until (i > PC_max) OR (Error_Lex = 1);     // wenn Fehler, Abbruch der Schleife
+
+ // Syntaxprüfung
+ if Error_Lex = 0 then                    // Syntaxprüfung wenn kein Codefehler
+  begin
+   i := 0;                                                       // PC auf null
+   repeat
+    Syntax(Prog_Dat[i,1],Prog_Dat[i,2],Error1);                   // Syntaxtest
+    if Error1 = 1 then
+     begin
+      Button12.Enabled := false;                // Grid überladen nicht möglich
+      Application.MessageBox( PChar('Syntax Error in line '+ IntToStr(i)), 'Error', 48);
+      StringGrid2.Col := 2;                                    // Spalte setzen
+      StringGrid2.Row := i+1;                       // fehlerhafte Zeile setzen
+      StringGrid2.SetFocus;
+      Exit;                                                          // Abbruch
+     end;
+    Inc(i);                                                              // i+1
+   until i > PC_max;                                          // PC durchlaufen
+
+   Make_Code;                                                  // Code erzeugen
+   Button12.Enabled := true;                          // Grid überladen möglich
+   Application.MessageBox( PChar('Code is ready'), 'Compiler', 64);
+
+   temp := 1;
+  end; // end if Error_Lex = 0
+end;
+
+//------------------------------------------------------------------------------
+// Compiler New-Button
+//------------------------------------------------------------------------------
+procedure TForm1.Button10Click(Sender: TObject);
+var
+  i : Word;                                                          // Index
+
+begin
+ for i := 0 to PC_max do                           // bis ende Programmspeicher
+  begin
+   Prog_Dat[i,1] := '';                                 // Programmcode löschen
+   Prog_Dat[i,2] := '';
+   StringGrid2.Cells[0,i+1] := '';                        // PC-Counter löschen
+   StringGrid2.Cells[1,i+1] := '';                              // Code löschen
+   StringGrid2.Cells[2,i+1] := '';                           // Adresse löschen
+  end; // for i := 0
+  CDaten_H := '';
+end;
+
+
+//------------------------------------------------------------------------------
+// Compiler Grid Action
+//------------------------------------------------------------------------------
+procedure TForm1.StringGrid2Click(Sender: TObject);
+begin
+ temp := StringGrid2.Row;
+ with StringGrid2 do
+  begin
+   Cells[0,Row] := InttoStr(Row-1);                 // nummeriert Eingabezeilen
+   Cells[Col,Row] := UpperCase(Cells[Col,Row]);    // in Großbuchstaben wandeln
+  end;
+end;
+
+//------------------------------------------------------------------------------
+// mögliche Compiler Zahlen (Schlüselwörter)
+//------------------------------------------------------------------------------
+procedure Init_Zahlen;
+var i : Byte;                                                          // Index
+begin
+ for i := 0 to 255 do Zahl[i] := IntToStr(i);
+end;
+
+//------------------------------------------------------------------------------
+// mögliche Compiler Befehle (Schlüselwörter)
+//------------------------------------------------------------------------------
+procedure Init_Befehle;
+var i : Byte;
+begin
+// for i := 0 to 127 do Befehl[i] := 'FF';      // alle ungenutzen Befehle mit FF
+
+ Befehl[0] := '';                                                        // NOP
  Befehl[1] := '+';
  Befehl[2] := '-';
  Befehl[3] := '*';
@@ -618,4 +888,5 @@ end;
 
 Begin
  Init_Befehle;
+ Init_Zahlen;
 End.
