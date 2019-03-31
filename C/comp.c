@@ -28,9 +28,10 @@
 
 #include "boris.h"
 
-
-unsigned short get_cmd_cde(char * code);
-int needs_adress(char code);
+// Ich weiss, globale Variablen sind keine gute idee
+int statflag_file_output;
+int statflag_verbose_mode;
+int statflag_fill_nop_mode;
 
 
 // --------------------------------------------------
@@ -83,6 +84,7 @@ int needs_adress(char code) {
  return 0;
 }
 
+
 // --------------------------------------------------
 // Kommandocodes umsetzen
 unsigned short get_cmd_cde(char * code) {
@@ -96,70 +98,190 @@ unsigned short get_cmd_cde(char * code) {
 }
 
 
-void main(int argc, char ** argv[]) {
-     FILE* file;
+void usage(char * Program) {
+   fprintf(stderr, "%s - Ein Kommandozeilen Assembler fuer boris4 - Programme\n\n",Program);
+   fprintf(stderr, "Bitteschoen: %s [-v] [-n] [-o outfile] Eingabedatei\n",Program);
+   fprintf(stderr, "     -n          Datei mit NOP auffuellen\n");
+   fprintf(stderr, "     -v          Verbose mode\n");
+   fprintf(stderr, "     -o Datei    Ausgabe in eine Datei (default: stdout)\n");
+}
+
+
+int main(int argc, char * argv[]) {
+     FILE* file_in;
+     FILE* file_out;
      char line[256];
      char kdo[8];
      char *s;
-     int i, a;
+     int c, i, a;
      int ch;
 
      int adresse;
      int zeile;
 
      unsigned short code;
+
+     int index;
      
+     char infile[256];
+     char outfile[256];
+
+     opterr = 0;
+
+     statflag_file_output = 0;
+     statflag_verbose_mode = 0;
+     statflag_fill_nop_mode = 0;
+
      s = line;
      a = 0;
      ch = 0;
-     // Nur mit Argument starten 
-     if(argc!=2) {
-         fprintf(stderr, "Bittschoen : %s <sourcefile> > <binaerfile> \n",argv[0]);
+
+     while ((c = getopt (argc, argv, (const char *) "nhvo")) != -1) {
+        switch (c)
+          {
+          case 'v':
+            statflag_verbose_mode = 1;
+            break;
+          case 'n':
+            statflag_fill_nop_mode = 1;
+            break;
+          case 'o':
+            statflag_file_output = 1;
+            break;
+          case 'h':
+            usage(argv[0]);
+            return 1;
+            break;
+          case '?':
+            if (isprint (optopt))
+              fprintf (stderr, "Unbekannte Option `-%c'.\n", optopt);
+            return 1;
+          default:
+            abort ();
+          }
+      }
+
+      if (statflag_verbose_mode) {
+         fprintf (stderr, "statflag_file_output = %d\n", statflag_file_output);
+
+         for (index = optind; index < argc; index++) {
+           fprintf (stderr, "Non-option argument %s\n", argv[index]);
+         }
+      }
+
+      index = optind;
+
+      if (index >= argc) {
+          fprintf (stderr, "Parameterfehler\n");
+          usage(argv[0]);
+          return 1;
+      }
+
+      if (statflag_file_output) {
+        strcpy(outfile, argv[index]);
+        index++;
+        if (index >= argc) {
+          fprintf (stderr, "Parameterfehler\n");
+          usage(argv[0]);
+          return 1;
+        }
+        strcpy(infile, argv[index]);
+      } else {
+        strcpy(infile, argv[index]);
+      }
+
+      if (statflag_verbose_mode)
+         fprintf(stderr, "Files: Input: >%s< Output: >%s<\n", infile, outfile);
+
+     if(strlen(infile) == 0) {
+         usage(argv[0]);
      } else {
+         file_in=fopen((const char *) infile, "r"); 
+         if (file_in==NULL) {
+             fprintf(stderr, "ERROR: Fehler beim Oeffnen der Datei %s\n", infile);
+             return 1;
+         }
+
+         if (statflag_file_output) {
+            file_out=fopen((const char *) outfile, "w"); 
+            if(file_out==NULL) {
+                fprintf(stderr, "ERROR: Fehler beim Oeffnen der Datei %s\n", outfile);
+                return 1;
+            }
+         } else {
+            file_out=stdout;
+         }
+
 #ifdef _WIN32
-         _setmode(_fileno(stdout), _O_BINARY);
+         // _setmode(_fileno(stdout), _O_BINARY);
+         _setmode(_fileno(file_out), _O_BINARY);
 #endif
-         file=fopen((const char *)argv[1], "r");
-         if(file==NULL)
-             fprintf(stderr, "ERROR: Fehler beim Oeffnen der Datei %s\n", argv[1]);
-          else {
-             while (fgets(s, 255, file) != NULL) {
-                if (!is_comment(line)) {
-                   if (isWspace (line[0])){
-                      i = sscanf(s, " %s %d", &kdo, &adresse);
-                      i++;
-                   } else {
-                      i = sscanf(s, "%d %s %d", &zeile, &kdo, &adresse);
-                   }
-                   
-                   a++;
-                   code = get_cmd_cde(kdo);
-                   if (!needs_adress(code)) {
-                      i++;
-                      adresse = 0;
-                   }
-                   if (i != 3) {
-                      fprintf(stderr, "ERROR: Parameterfehler >%s< \n", line);
-                   } else {
-                      printf("%c%c", code, (char) adresse);
-                   }
-                }
-             }
 
-             // END Marke schreiben
-             if (a < 100 && code != 126) {
-                   printf("%c%c", 126, a);
-                   a++;
-             }
 
-             while (a < 100) {
-                   printf("%c%c", 0, 0);
-                   a++;
-             }
+         // printf("%c%c", 170, 83);
+         while (fgets(s, 255, file_in) != NULL) {
+            if (!is_comment(line)) {
+               if (isWspace (line[0])){
+                  i = sscanf(s, " %s %d", &kdo, &adresse);
+                  i++;
+               } else {
+                  i = sscanf(s, "%d %s %d", &zeile, &kdo, &adresse);
+                  // Fehlerbehandlung bzw Markenverschiebung
+                  if (a != zeile) {
+                      fprintf(stderr, "WARNING: Adressabweichung in Zeile %d (%d)\n", a, zeile);
+                      if (a < zeile) {
+                         while (a < zeile) {
+                           fprintf(file_out, "%c%c", 0, 0);
+                           a++;
+                         }
+                      } else {
+                         fprintf(stderr, "ERROR: Adressabweichung in Zeile %d (%d) nicht korrigierbar\n", a, zeile);
+                      }
+                  }
+               }
+               
+               a++;
+               code = get_cmd_cde(kdo);
+               if (!needs_adress(code)) {
+                  i++;
+                  adresse = 0;
+               }
+               if (i != 3) {
+                  fprintf(stderr, "ERROR: Parameterfehler >%s< \n", line);
+               } else {
+                  fprintf(file_out, "%c%c", code, (char) adresse);
+                  if (statflag_verbose_mode)
+                     fprintf (stderr, ".");
+               }
+            }
+         }
 
-             fclose(file);
+         // END Marke schreiben
+         if (a < 100 && code != 126) {
+               fprintf(file_out, "%c%c", 126, a);
+               a++;
+         }
+
+         if (statflag_verbose_mode)
+                  fprintf (stderr, "\n%d Zeilen\n",a);
+
+         if (statflag_fill_nop_mode) {
+            while (a < 100) {
+                  fprintf(file_out, "%c%c", 0, 0);
+                  a++;
+            }
+            if (statflag_verbose_mode)
+                  fprintf (stderr, "Auffuellen mit NOP bis %d\n",a);
+         }
+
+         fclose(file_in);
+         if (statflag_file_output) {
+            fclose(file_out);
          }
      }
-}
+     if (statflag_verbose_mode)
+              fprintf (stderr, "OK\n");
 
+     return 0;
+}
 
