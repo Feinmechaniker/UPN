@@ -23,13 +23,13 @@
 
 #include "boris.h"
 
-char * get_cmd_str(char code);
-int needs_param(char code);
-int needs_adress(char code);
-int needs_mem_adress(char code);
-int needs_prog_adress(char code);
-void prep_marke(char * marke, int flag, int a);                
+// Ich weiss, globale Variablen sind keine gute idee
+int statflag_hex_output;
+int statflag_line_output;
+int statflag_file_output;
+int statflag_verbose_mode;
 
+// Braucht das Kommando eine Adresse - Zusammenfassung
 int needs_adress(char code) {
  return (needs_mem_adress(code) + needs_prog_adress(code) + needs_param(code));
 }
@@ -53,6 +53,7 @@ int needs_prog_adress(char code) {
 }
 
 
+// Formatieren des Markenfeldes auf 3 Dezimale mit fuehrenden Nullen
 void prep_marke(char * marke, int flag, int a) {
    char * cp;
    int i;
@@ -63,7 +64,7 @@ void prep_marke(char * marke, int flag, int a) {
      cp++;
    }
    *cp = '\0';
-   if (flag) sprintf(marke, "%03d", a);   
+   if (flag || statflag_line_output) sprintf(marke, "%03d", a);   
 }                
 
 // Kommandocodes umsetzen
@@ -74,10 +75,49 @@ char * get_cmd_str(char code) {
   return (char *) NULL;
 }
 
-void main(int argc, char ** argv[])
-{
-     FILE* file;
-     int i, a;
+// Ausgabeformatierung
+static char * prepare_output_line(char *marke, char *kdo, int adresse, int ch) {
+   static char codeline[24];
+   char *cp;
+
+   cp = codeline;
+   *cp = '\0';
+   if ( needs_adress(ch)) {
+       // printf ("%s %s %d\t; %02x %02x\n", marke, kdo, adresse, ch, adresse);
+       sprintf (codeline, "%s %s %d", marke, kdo, adresse);
+   } else {
+       // printf ("%s %s\t; %02x %02x\n", marke, kdo, ch, 0);
+       sprintf (codeline, "%s %s", marke, kdo);
+   }
+   cp+=strlen(codeline);
+
+   while(cp<codeline+16) {
+      *cp = ' ';
+      cp++;
+   }
+   if (statflag_hex_output) {
+      sprintf(cp, "; %02x %02x", ch, adresse);
+      cp += 7;
+   }
+   *cp = '\0';
+   return codeline;
+}
+
+
+void usage(char * Program) {
+   fprintf(stderr, "%s - Ein Kommandozeilen Disassembler fuer boris4 - Programme\n\n",Program);
+   fprintf(stderr, "Bitteschoen: %s [-lxv] [-o outfile] Eingabedatei\n",Program);
+   fprintf(stderr, "     -l          Alle Zeilennummern ausgeben (default: nur als Marken benutzte)\n");
+   fprintf(stderr, "     -v          Verbose mode\n");
+   fprintf(stderr, "     -x          Hexcode als Kommentar hinzufuegen\n");
+   fprintf(stderr, "     -o Datei    Ausgabe in eine Datei (default: stdout)\n");
+}
+
+
+int main(int argc, char * argv[]) {
+     FILE* file_in;
+     FILE* file_out;
+     int c, i, a;
      int ch;
 
      int adresse;
@@ -87,6 +127,82 @@ void main(int argc, char ** argv[])
      int used_prog[256];
 
      char marke[4];
+
+     char *cp;
+
+     int index;
+
+     char infile[256];
+     char outfile[256];
+
+     statflag_hex_output = 0;
+     statflag_file_output = 0;
+     statflag_line_output = 0;
+     statflag_verbose_mode = 0;
+     
+     opterr = 0;
+
+     while ((c = getopt (argc, argv, (const char *) "lxhvo")) != -1) {
+        switch (c)
+          {
+          case 'x':
+            statflag_hex_output = 1;
+            break;
+          case 'v':
+            statflag_verbose_mode = 1;
+            break;
+          case 'o':
+            statflag_file_output = 1;
+            break;
+          case 'l':
+            statflag_line_output = 1;
+            break;
+          case 'h':
+            usage(argv[0]);
+            return 1;
+            break;
+          case '?':
+            if (isprint (optopt))
+              fprintf (stderr, "Unbekannte Option `-%c'.\n", optopt);
+            return 1;
+          default:
+            abort ();
+          }
+      }
+
+      if (statflag_verbose_mode) {
+         fprintf (stderr, "statflag_hex_output = %d, statflag_file_output = %d\n", statflag_hex_output, statflag_file_output);
+
+         fprintf (stderr, "optind = %d, argc = %d\n", optind, argc);
+
+         for (index = optind; index < argc; index++) {
+           fprintf (stderr, "Non-option argument %s\n", argv[index]);
+         }
+      }
+
+      index = optind;
+
+      if (index >= argc) {
+          fprintf (stderr, "Parameterfehler\n");
+          usage(argv[0]);
+          return 1;
+      }
+
+      if (statflag_file_output) {
+        strcpy(outfile, argv[index]);
+        index++;
+        if (index >= argc) {
+          fprintf (stderr, "Parameterfehler\n");
+          usage(argv[0]);
+          return 1;
+        }
+        strcpy(infile, argv[index]);
+      } else {
+        strcpy(infile, argv[index]);
+      }
+
+      if (statflag_verbose_mode)
+         fprintf(stderr, "Files: Input: >%s< Output: >%s<\n", infile, outfile);
 
      // Wir merken uns beim einlesen die verwendeten Speicher / Programmzeilen um dann spaeter 
      // nur die Marken schreiben zu muessen, die wirklich verwendet werden
@@ -101,53 +217,80 @@ void main(int argc, char ** argv[])
 
      a = 0;
      ch = 0;
-     if(argc!=2) {
-         fprintf(stderr, "Bitteschoen: %s <binaerdatei> > <sourcedatei>\n",argv[0]);
+
+     if(strlen(infile) == 0) {
+         usage(argv[0]);
      } else {
-         file=fopen((const char *)argv[1], "r"); 
-         if(file==NULL)
-             fprintf(stderr, "ERROR: Fehler beim Oeffnen der Datei %s\n", argv[1]);
-          else {
-             // Erst mal nur nach Adressen suchen
-             while (ch != EOF) {
-                ch = fgetc(file);
-                adresse = fgetc(file); 
-                kdo =  get_cmd_str((char) ch);
-                if (needs_mem_adress(ch)) used_mem[adresse] = 1;
-                if (needs_prog_adress(ch)) used_prog[adresse] = 1;
-             }
-                
-             rewind (file);
-             ch = 0;
+         file_in=fopen((const char *) infile, "r"); 
+         if (file_in==NULL) {
+             fprintf(stderr, "ERROR: Fehler beim Oeffnen der Datei %s\n", infile);
+             return 1;
+         }
 
-             printf ("# Programm %s\n", (const char *)argv[1]);
-             printf ("# Verwendete Speicher: ");
-             for(i=0;i<32;i++) {
-                if (used_mem[i]) printf ("%d ", i);
-             }
-             printf ("\n");
+         if (statflag_file_output) {
+            file_out=fopen((const char *) outfile, "w"); 
+            if(file_out==NULL) {
+                fprintf(stderr, "ERROR: Fehler beim Oeffnen der Datei %s\n", outfile);
+                return 1;
+            }
+         } else {
+            file_out=stdout;
+         }
 
-             while (ch != EOF) {
-                ch = fgetc(file);
-                adresse = fgetc(file); 
-                kdo =  get_cmd_str((char) ch);
-                if (needs_mem_adress(ch)) used_mem[adresse] = 1;
-                prep_marke(marke, used_prog[a], a);                
-                if (ch != EOF && adresse != EOF && kdo != NULL) {
-                   if ( needs_adress(ch)) {
-                      // printf ("%s %s %d\t; %02x %02x\n", marke, kdo, adresse, ch, adresse);
-                      printf ("%s %s %d\n", marke, kdo, adresse);
-                   } else {
-                      // printf ("%s %s\t; %02x %02x\n", marke, kdo, ch, 0);
-                      printf ("%s %s\n", marke, kdo);
-                   }
-                   a++; 
-                }
-             }
+         // Erst mal nur nach Adressen suchen
+         while (ch != EOF) {
+            ch = fgetc(file_in);
+            adresse = fgetc(file_in); 
+            kdo =  get_cmd_str((char) ch);
+            if (needs_mem_adress(ch)) used_mem[adresse] = 1;
+            if (needs_prog_adress(ch)) used_prog[adresse] = 1;
+         }
+            
+         rewind (file_in);
+         ch = 0;
 
-             fclose(file);
+         fprintf (file_out, "# Programm %s\n", (const char *)infile);
+         fprintf (file_out, "# Verwendete Speicher: ");
+         if (statflag_verbose_mode)
+            fprintf (stderr, "Verwendete Speicher: ");
+
+         for(i=0;i<32;i++) {
+            if (used_mem[i]) {
+              fprintf (file_out, "%d ", i);
+              if (statflag_verbose_mode)
+                 fprintf (stderr, "%d ", i);
+            }
+         }
+         fprintf (file_out, "\n");
+         if (statflag_verbose_mode)
+               fprintf (stderr, "\n");
+
+         while (ch != EOF) {
+            ch = fgetc(file_in);
+            adresse = fgetc(file_in); 
+            kdo =  get_cmd_str((char) ch);
+            if (needs_mem_adress(ch)) used_mem[adresse] = 1;
+            prep_marke(marke, used_prog[a], a);                
+            if (ch != EOF && adresse != EOF && kdo != NULL) {
+               cp =  prepare_output_line(marke, kdo, adresse, ch);
+               fprintf(file_out, "%s\n", cp);
+               a++; 
+               if (statflag_verbose_mode)
+                  fprintf (stderr, ".");
+            }
+         }
+
+         if (statflag_verbose_mode)
+                  fprintf (stderr, "\n%d Zeilen\n",a);
+
+         fclose(file_in);
+         if (statflag_file_output) {
+            fclose(file_out);
          }
      }
-}
+     if (statflag_verbose_mode)
+              fprintf (stderr, "OK\n");
 
+     return 0;
+}
 
