@@ -74,6 +74,8 @@ Const U821_disp = 1                                         ' U821 Display Mode
 Const Hp29c_comp = 1
 ' Const Hp29c_comp = 0 ' Rt wird mit "0" initialisiert
 
+' individueller Kalibrierwert für den internen RC-Oszillator (vorher ermitteln!)
+OSCCAL = 86
 
 ' Tastaturmatrix
 ' PB0-PB6 - Zeilen - Output
