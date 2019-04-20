@@ -16,3 +16,8 @@ diskutiert werden.
 - 0xAA		- *connect* verbidet den Taschenrechner mit dem PC
 - 0x52 		- *read* liest den Programmspeicher des Taschenrechners
 - 0x53		- *write* schreibt den Programmspeicher des Taschenrechners
+
+- 0x54 - upload von Files vom PC zum boris im Blockmodus (XMODEM-ähnlich)
+- 0x55 - download von Files von boris zum PC im Blockmodus (XMODEM-ähnlich)
+- 0x56 - Remote-start eines Programms über die serielle Schnittstelle
+
