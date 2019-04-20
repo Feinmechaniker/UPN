@@ -12,3 +12,6 @@ Initial version is compatible with
 - BCommander 
 
 Remark: EEPROM dumps of the ATMega EEPROM have a swapped byte order!
+
+terminal - a command line tool to communicate with boris via serial line. needs boris v2.17
+
