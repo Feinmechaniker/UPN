@@ -837,22 +837,3 @@ int main(int argc, char * argv[]) {
    return 0;
 }
 
-
-
-
-
-/*
-
-Now, when you have a COM port open, you may want to send some data to the connected device. For example, let's say you want to send "Hello" to the device (for example, another PC). When you want to send the data across the serial port, you need to write to the serial port just as you would write to a file. You would use following API:
-
-iRet = WriteFile (m_hCommPort,data,dwSize,&dwBytesWritten ,&ov);
-where data contains "Hello".
-
-Let's say that, in response to your "Hello", the device sends you "Hi". So, you need to read the data. Again, you would use the following API:
-
-abRet = ::ReadFile(m_hCommPort,szTmp ,sizeof(szTmp ),&dwBytesRead,&ovRead) ;
-For now, do not try to understand everything. We will get to all this later. All this sounds very simple. Right?
-Now, let's start digging into issues.
-
-*/
-
