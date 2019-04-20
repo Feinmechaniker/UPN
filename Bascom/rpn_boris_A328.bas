@@ -45,6 +45,7 @@
 '           2.14 (JG) UART Funktion zum Sichern und Laden von Programmen eingeführt
 '           2.15 Einstellungsmimik (Displaymodus, grd/rad) geaendert, rechnende Speicher
 '           2.16 Dezimalpunktfehler bei Mehrfacheingabe
+'           2.17 Zusatzfunktionen / Alternative Verwendung der seriellen Schnittstelle
 '
 '
 '----------------------------------------------------------
@@ -52,8 +53,12 @@
 $regfile = "m328pdef.dat"                                   ' ATmega328-Deklarationen
 
 $prog &HFF , &H62 , &HD9 , &HFF                             ' generated. Take care that the chip supports all fuse bytes.
+
 $crystal = 1000000                                          ' Kein Quarz: 1MHz MHz
 $baud = 9600                                                ' Baudrate der UART: 9600 Baud
+
+Osccal = 95                                                 ' Kalibrierung des RC Oscillators, Dieser Wert muss noch hinexperimentiert werden
+Echo Off
 
 $hwstack = 196                                              ' hardware stack (32)
 $swstack = 196                                              ' SW stack (10)
@@ -64,7 +69,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "4.2.16"                                  '
+Const K_version = "4.2.17"                                  '
 
 ' Compile-Switch um zwischen U821 und normaler Zifferndarstellung zu unterscheiden
 Const U821_disp = 1                                         ' U821 Display Mode
@@ -74,8 +79,15 @@ Const U821_disp = 1                                         ' U821 Display Mode
 Const Hp29c_comp = 1
 ' Const Hp29c_comp = 0 ' Rt wird mit "0" initialisiert
 
-' individueller Kalibrierwert f�r den internen RC-Oszillator (vorher ermitteln!)
-OSCCAL = 86
+' Mit dem folgenden Compile-Switch werden die Blockladefunktionen / Remotestart enabled.
+' Diese Funktionen sind nicht kompatibel zum BorisCommander (noch nicht?)
+' Compile-Switch fuer eine Alternative Verwendung der Seriellen Schnittstelle (Blockweise, mit Protokoll)
+Const Block_communication = 1
+
+#if Block_communication = 1
+' Wenn mit Interrupt, dann diese Config
+Config Serialin = Buffered , Size = 20
+#endif
 
 ' Tastaturmatrix
 ' PB0-PB6 - Zeilen - Output
@@ -157,6 +169,15 @@ Declare Sub Uart()                                          ' UART Funktion zum 
 Declare Sub File_send()                                     ' Sendefunktio
 Declare Sub File_receive()                                  ' Empfangsfunktion
 
+#if Block_communication = 1
+Declare Sub Upload_block()                                  ' Protokolliges Empfangen von einem Datenblock mit Pruefsumme und Quittung
+Declare Sub Upload_file()                                   ' Protokolliges Empfangen von einer Datei
+Declare Sub Download_block(byval Schluss As Byte)           ' Protokolliges Empfangen von einem Datenblock mit Pruefsumme und Quittung
+Declare Sub Download_file()                                 ' Protokolliges Empfangen von einer Datei
+Declare Sub Download_headerblock(byval Size As Byte)
+Declare Sub Run_program()
+#endif
+
 ' ========================================================================
 ' Nun denn: Variablen
 ' ========================================================================
@@ -222,6 +243,16 @@ Dim P_goflag As Bit                                         ' Flag ob wir gerade
 
 Dim P_heartbeat As Byte                                     ' Flag Zur Schlangensteuerung
 
+#if Block_communication = 1
+Dim G_uart_error As Byte                                    ' Fehlerflag
+Dim F_blocknr As Byte                                       ' gelesene Blocknummer
+Dim F_nextblock As Byte                                     ' erwarteter naechster Block
+Dim F_blockuse As Byte                                      ' Verwendung des Datenblocks
+Dim F_blockfolg As Byte                                     ' Es folgt ein weiterer Datenblock
+Dim F_blockptr As Byte                                      ' Adresse der Programmspeicherzelle, die geschrieben wird
+
+Dim Zbuffer(16) As Byte                                     ' Lesepuffer der seriellen Schnittstelle
+#endif
 
 ' ========================================================================
 ' Kommandocodes
@@ -314,6 +345,10 @@ Const D_char_bl = 31
 Const D_char_bs = 32
 Const D_char_bu = 33
 
+#if Block_communication = 1
+Const D_char_pfr = 34                                       ' Pfeil rechts
+Const D_char_pfl = 35                                       ' Pfeil links
+#endif
 
 ' ========================================================================
 
@@ -329,6 +364,13 @@ Const D_char_bu = 33
 Config Portd.3 = Output : Din_display Alias Portd.3
 Config Portd.5 = Output : Clk_display Alias Portd.5
 Config Portd.2 = Output : Cs_display Alias Portd.2
+
+#if Block_communication = 1
+' Die UART im Binaermodus
+' Ist wahrscheinlich nicht erforderlich, aber der Klarheit wegen
+Open "Com1:9600,8,N,1" For Binary As #1
+#endif
+
 
 ' Initialisieren der UPN-Rechenregister
 Rx = 0.0
@@ -406,8 +448,8 @@ Enable Interrupts
 Call Clear_output
 ' Call Interpr_rx
 Call Clear_input                                            ' Eingaberegister leeren
-Call Show_version
 Call Init_max7219
+Call Show_version
 Call Anzeigen
 
 Waitms 1000
@@ -418,9 +460,16 @@ Call Anzeigen
 Do                                                          'Hauptschleife
       Waitms 1000
 
+#if Block_communication = 1
+      'get a char from the UART
+      If Ischarwaiting() = 1 Then Call Uart                 ' Ist was auf der Seriellen Schnittstelle?
+#else
       ' -JG-
       If Ucsr0a.rxc0 = 1 Then Call Uart                     ' Zeichen auf der UART-Schnittstelle empfangen
+#endif
+
 Loop
+
 End
 
 ' ========================================================================
@@ -1740,6 +1789,14 @@ Function Convert(incode As Byte) As Byte
        Convert = 61
      Case D_char_bu                                         ' U
        Convert = 62
+
+#if Block_communication = 1
+     Case D_char_pfr                                        ' Pfeil rechts
+       Convert = 7
+     Case D_char_pfl                                        ' Pfeil links
+       Convert = 49
+#endif
+
    End Select
 
    If Komma = 1 Then
@@ -1907,9 +1964,18 @@ End Sub Init_max7219
 ' Conect
 ' ========================================================================
 Sub Display_con()
-        W_st(8) = D_char_bc                                 ' C
-        W_st(7) = D_char_o                                  ' o
-        W_st(6) = D_char_n                                  ' n
+#if Block_communication = 1
+      Local I As Byte
+      For I = 1 To 8
+         W_st(i) = D_space
+      Next I
+      W_st(4) = D_minus
+      W_st(5) = D_minus
+#else
+      W_st(8) = D_char_bc                                   ' C
+      W_st(7) = D_char_o                                    ' o
+      W_st(6) = D_char_n                                    ' n
+#endif
         Call Anzeigen
 End Sub Display_con
 
@@ -1988,29 +2054,340 @@ Sub File_send()
 End Sub File_send
 
 
+#if Block_communication = 1
+
+' ========================================================================
+' Protokolliges Empfangen von einem Datenblock mit Pruefsumme und Quittung
+' Wir bekommen ein Paket von 12 Binär-Bytes
+'
+'   // Byte 0: Blocknummer, zaehlt hoch
+'   // Byte 1: Verwendung
+'   //          01 - Info-Block, wird nicht gespeichert
+'   //          02 - Programmblock
+'   // Byte 2-9 Datenbytes
+'   // Byte 10 Niederes Byte der Summe über 0-9
+'   // Byte 11 Folgekennzeichen
+'   //          0x0F - Es folgt ein weiterer Datenblock
+'   //          0xFF - Dateiende
+
+'
+' Headerblock:
+'   // Byte 0: Blocknummer, = 0
+'   // Byte 1: Verwendung   = 01
+'   //          01 - Info-Block, wird nicht gespeichert
+'   // Byte 2 Startadresse des Programme im Speicher
+'   // Byte 3-9 Label zur Anzeige im Display o.ae
+'   // Byte 10 Niederes Byte der Summe über 0-9
+'   // Byte 11 Folgekennzeichen = 0x0F
+'
+' Wenn der Block sauber angekommen ist, Quittieren wir mit 2 Bytes
+'   0x58 - Pruefsumme stimmt, alles OK - sonst 0x59 - Fehler
+'   xx   - Blocknummer des gelesenen Blocks oder FF
+'
+' ========================================================================
+
+Sub Upload_block()
+   Local Summe As Byte
+   Local I As Byte
+   Local J As Byte
+   Local Flag As Byte
+
+   Local Zch As Word                                        ' Doppelbyte im EEPROM
+   Local Newchar As Byte
+
+   G_uart_error = 0
+   Summe = 0                                                ' Fehlerspeicher loeschen
+   Flag = 0
+
+   ' Wir lesen 12 Zeichen in den Lesepuffer Zbuffer
+   For J = 1 To 12
+      I = 0
+      Do
+         Waitms 10
+         Flag = Ischarwaiting()
+         Incr I
+      Loop Until Flag = 1 Or I > 100
+      If Flag = 1 Then
+        Inputbin Newchar , 1
+        ' Newchar = Udr
+        Zbuffer(j) = Newchar
+      Else
+        G_uart_error = J
+      End If
+   Next J
+
+   If G_uart_error = 0 Then
+      For I = 1 To 10
+         Summe = Summe + Zbuffer(i)
+      Next I
+   End If
+
+   If Summe = Zbuffer(11) And F_nextblock = Zbuffer(1) Then
+      ' Sauber gelesen! Wenn es  der Block 0 war, wissen wir jetzt einige Steuerdaten
+      F_blocknr = Zbuffer(1)
+      F_blockuse = Zbuffer(2)
+      F_blockfolg = Zbuffer(12)
+
+      If F_blocknr = 0 Then                                 ' Startadresse lesen und merken
+         F_blockptr = Zbuffer(3) + 1                        ' Wir bekommen die logische Startadresse 0, brauchen aber den Index 1, sonst fehlt der erste Befehl
+      End If
+                                                         ' Alles OK, wir schreiben den EEPROM
+      If F_blocknr = &HFF Then                              ' Abbruchbedingung, es gibt keinen Block mit BN FF
+         G_uart_error = &HFF                                ' Keine Ahnung, ob wir das noch nutzen wollen
+         F_blockfolg = &HFF                                 ' nicht weiterlesen!
+         Printbin &H59 ;
+         Printbin &HFF ;
+         Exit Sub
+      End If
+                                                         ' Alles OK, wir schreiben den EEPROM
+      If F_blockuse = 2 Then
+         J = 3
+         For I = 1 To 4
+            Zch = Zbuffer(j) * 256
+            Incr J
+            Zch = Zch + Zbuffer(j)
+            Incr J
+            Ee_program(f_blockptr) = Zch                    ' von Buffer nach EEPROM umkopieren
+            Incr F_blockptr
+         Next I
+      End If
+      ' Wir erwarten den naechsten Block
+      F_nextblock = F_blocknr + 1
+      ' Quittung senden
+      Printbin &H58 ;
+      Print Chr(f_blocknr) ;
+   Else
+      ' Fehler!
+      Printbin &H59 ;
+      Printbin &HFF ;
+   End If
+
+End Sub Upload_block
+
+
+' Eine ganze Datenuebertragung mit mehreren Bloecken
+' Faengt immer mit Block 0 an
+' Daraus lesen wir die Startadresse
+' Es wird so lange gelesen, bis ein Endblock erkannt wird
+' Jeder Block wird quittiert
+Sub Upload_file()
+   W_st(4) = D_char_pfr                                     ' Pfeil rechts
+   Call Anzeigen
+
+   ' Als erstes soll der Headerblock kommen
+   F_nextblock = 0
+   Do
+      Call Upload_block()
+      W_st(2) = F_blocknr \ 10
+      W_st(1) = F_blocknr Mod 10
+      Call Anzeigen
+   Loop Until F_blockfolg = &HFF
+
+End Sub Upload_file
+
+
+' Protokolliges Senden einer Datei
+Sub Download_file()
+
+  W_st(5) = D_char_pfl                                      ' Pfeil links
+  Call Anzeigen
+
+  Local Indx As Word
+  Local Zch As Word
+  Local Programsize As Byte
+  Local Bi As Byte
+  Local Bj As Byte
+
+  Local Bpc As Byte                                         ' Der Programmzeiger , physisch 1-100
+
+  ' Bestimmen wir erst mal, wie gross die zu sichernde Datei ist
+  ' Wir suchen den Programmspeicher rueckwaerts nach Sinn ab
+
+  Indx = 100
+
+  Do
+     Zch = Ee_program(indx)
+     Decr Indx
+  Loop Until Zch <> 0 And Indx > 0
+
+  If Indx > 0 Then                                          ' Wir haben etwas sinnvolles gefunden
+     Programsize = Indx + 1
+     F_blocknr = 0
+     Call Download_headerblock(programsize)
+
+     If G_uart_error = 0 Then
+        ' Und jetzt die Datenbloecke
+        Bpc = 1
+        Do
+           Waitms 100
+
+           Incr F_blocknr
+           Zbuffer(1) = F_blocknr
+           Zbuffer(2) = 2
+           Bj = 3
+
+           For Bi = 1 To 4
+              Zch = Ee_program(bpc)                         ' Lese Word
+              Zbuffer(bj) = High(zch)                       ' High-Teil senden
+              Incr Bj
+              Zbuffer(bj) = Low(zch)
+              Incr Bj
+              Incr Bpc
+           Next Bi
+           If Bpc >= Programsize Then
+              Call Download_block(&Hff)
+           Else
+              Call Download_block(&H0f)
+           End If
+           If G_uart_error <> 0 Then
+              ' Fehler, abbruch!
+              Bpc = &HFF
+           End If
+           W_st(8) = F_blocknr \ 10
+           W_st(7) = F_blocknr Mod 10
+           Call Anzeigen
+        Loop Until Bpc >= Programsize
+     End If
+   End If
+End Sub Download_file
+
+
+' Headerblock: In die Schnittstelle schreiben
+'   // Byte 0: Blocknummer, = 0
+'   // Byte 1: Verwendung   = 01
+'   //          01 - Info-Block, wird nicht gespeichert
+'   // Byte 2 Startadresse des Programme im Speicher
+'   // Byte 3-9 Label zur Anzeige im Display o.ae
+'   // Byte 10 Niederes Byte der Summe über 0-9
+'   // Byte 11 Folgekennzeichen = 0x0F
+Sub Download_headerblock(byval Size As Byte)
+
+  Local Indx As Word
+
+        Zbuffer(1) = 0
+        Zbuffer(2) = 1
+        Zbuffer(3) = 0
+        Zbuffer(4) = Size
+        For Indx = 5 To 10
+           Zbuffer(indx) = &H21
+        Next Indx
+
+        Call Download_block(&H0f)
+End Sub Download_headerblock
+
+
+' Protokolliges Senden von einem Datenblockes mit Pruefsumme und Quittung
+' Die Daten sind bereits im Zbuffer vorbereitet
+' Der Protokollstatus ist
+'   G_uart_error = 0   - Alles OK
+'   G_uart_error <> 0  - Fehler
+Sub Download_block(byval Schluss As Byte)
+  Local Ptr As Byte
+  Local Zchn As Byte
+  Local Si As Byte
+  Local A1 As Byte
+  Local A2 As Byte
+  Local Qflag As Byte
+
+  ' Pruefsumme und Folge /schlussbyte
+  Si = 0
+  For Ptr = 1 To 10
+      Si = Si + Zbuffer(ptr)
+  Next Ptr
+
+  Zbuffer(11) = Si
+  Zbuffer(12) = Schluss
+
+  ' Zeichenweise auf die UART ausgeben
+  For Ptr = 1 To 12
+      Zchn = Zbuffer(ptr)
+      Print Chr(zchn) ;
+  Next Ptr
+
+  ' Auf die Quittung warten
+  Si = 100                                                  ' Maximal 1 Sekunde auf Quittung warten
+  Do
+     Waitms 10
+     Qflag = Ischarwaiting()
+     Incr Si
+  Loop Until Qflag = 1 Or Si < 1
+
+  If Qflag = 1 Then
+      Inputbin A1 , 1
+      Inputbin A2 , 1
+      ' If A1 = &H58 And A2 = Zbuffer(1) Then
+      If A1 = &H58 Then
+         G_uart_error = 0
+      Else
+         G_uart_error = Si
+      End If
+  End If
+
+End Sub Download_block
+
+' Remote-Start eines Programms ueber die serielle Schnittstelle
+' Wir empfangen nur den Header-Block
+' Dort steht die Verwendung 03 und die Startadresse
+Sub Run_program()
+
+  W_st(6) = D_char_pfr                                      ' Pfeil rechts
+  W_st(5) = D_char_pfl                                      ' Pfeil links
+  Call Anzeigen
+
+  ' Wir lesen nur den Headerblock
+  F_nextblock = 0
+  Call Upload_block()
+
+  If Zbuffer(2) = 3 Then
+     P_pc = Zbuffer(3)                                      ' Der PC ist logisch (0-99)
+     P_goflag = 1
+  End If
+End Sub Run_program
+
+
+#endif
+
 ' ========================================================================
 ' UART-Funktion zum Senden und Empfangen von Zeichen über die UART
 ' ========================================================================
 Sub Uart()
    Local Zeichen As Byte
+   Local Zeichenflag As Byte
 
-   Disable Interrupts                                       ' alle Interrupts sperren
+   Disable Timer0                                           ' Timer Interrupts sperren
    Call Save_w_st                                           ' Anzeigeregister retten
-   Zeichen = Udr                                            ' Zeichen aus dem UART-Puffer lesen
+
+   Zeichen = Inkey()                                        ' Ein Zeichen von der UART
+
    If Zeichen = Uart_sync Then                              ' UART Sychronzeichen erkannt
     Print K_version                                         ' Antworten mit Versionsnummer
     Call Display_con                                        ' "connect" auf der Anzeige darstellen
+
+#if Block_communication = 1
+    Do
+      Waitms 10
+      Zeichenflag = Ischarwaiting()
+    Loop Until Zeichenflag = 1                              ' warten bis nächste Zeichen empfangen (immer High - Low)
+    Zeichen = Inkey()                                       ' High-Teil
+#else
     Do
     Loop Until Ucsr0a.rxc0 = 1                              ' wartenn bis nächste Zeichen empfangen
     Zeichen = Udr                                           ' Zeichen aus dem UART-Puffer lesen
+#endif
+
     Select Case Zeichen                                     ' Auswertung des Kommandos
      Case &H53 : Call File_send                             ' sendet Programspeicher zum PC (Binärdaten)
      Case &H52 : Call File_receive                          ' empfängt Binärdaten vom PC für Programspeicher
+#if Block_communication = 1
+     Case &H54 : Call Upload_file                           ' Blockweise routine PC -> boris
+     Case &H55 : Call Download_file                         ' Blockweise Routine boris -> PC
+     Case &H56 : Call Run_program                           ' Blockweise Routine boris -> PC
+#endif
     End Select
    End If
    Call Restore_w_st                                        ' Anzeigeregister wieder herstellen
    Call Anzeigen
-   Enable Interrupts                                        ' Interrupts wieder zulassen
+   Enable Timer0                                            ' Timer  Interrupts wieder zulassen
 End Sub Uart
 
 ' ========================================================================
