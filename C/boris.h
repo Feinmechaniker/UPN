@@ -29,30 +29,24 @@
 #include <string.h>
 
 #ifndef _WIN32
+
 #include <getopt.h>
+#include <termios.h> /* POSIX Terminal Control Definitions */
+#include <unistd.h>  /* UNIX Standard Definitions */
+#include <sys/ioctl.h>
+
 #else
 int getopt(int nargc, char * const nargv[], const char *ostr);
 #endif
 
-/* Funktionsprototypen */
+#include <ctype.h>
+#include <fcntl.h>   /* File Control Definitions           */
 
-char * get_cmd_str(char code);
-unsigned short get_cmd_cde(char * code);
+#include <errno.h>   /* ERROR Number Definitions */
 
-int is_comment(char *line);
-int is_empty_line(char *line);
-int isWspace (char p_zeichen);
-
-int main(int argc, char * argv[]);
-int needs_adress(char code);
-int needs_mem_adress(char code);
-int needs_param(char code);
-int needs_prog_adress(char code);
-
-static char * prepare_output_line(char *marke, char *kdo, int adresse, int ch);
-void prep_marke(char * marke, int flag, int a);
-
-void usage(char * Program);
+#ifdef _WIN32
+#include <io.h>
+#endif
 
 
 /* Hier ein Feld mit den symbolischen Kommandocodes */
