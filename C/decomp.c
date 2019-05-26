@@ -21,14 +21,28 @@
 *
 * **************************************************************************** */
 
-
 #include "boris.h"
+
+/* Funktionsprototypen */
+
+char * get_cmd_str(char code);
+
+int needs_adress(char code);
+int needs_mem_adress(char code);
+int needs_param(char code);
+int needs_prog_adress(char code);
+
+static char * prepare_output_line(char *marke, char *kdo, int adresse, int ch);
+void prep_marke(char * marke, int flag, int a);
+
+void usage(char * Program);
 
 // Ich weiss, globale Variablen sind keine gute idee
 int statflag_hex_output;
 int statflag_line_output;
 int statflag_file_output;
 int statflag_verbose_mode;
+int statflag_boris4_mode;
 
 // Braucht das Kommando eine Adresse - Zusammenfassung
 int needs_adress(char code) {
@@ -50,9 +64,12 @@ int needs_param(char code) {
 // GOTO, GOSUB, IF*i, END sind steuerbefehle und brauchen eine Adresse von 0.255
 int needs_prog_adress(char code) {
  if (code == 10 || code == 11 || code == 74 || code == 75 || code == 76 || code == 126) return 1;
+ // boris5 hat weitere Befehle
+ if (!statflag_boris4_mode) {
+    if (code == 116 || code == 117 || code == 118 || code == 119 || code == 120 || code == 121) return 1;
+ }
  return 0;
 }
-
 
 // Formatieren des Markenfeldes auf 3 Dezimale mit fuehrenden Nullen
 void prep_marke(char * marke, int flag, int a) {
@@ -71,7 +88,11 @@ void prep_marke(char * marke, int flag, int a) {
 // Kommandocodes umsetzen
 char * get_cmd_str(char code) {
   if (code > 127 || code < 0) return (char *) NULL;
-  if (code < 128 && strlen(kdo_codes[code]) > 0) return kdo_codes[code];
+  if (statflag_boris4_mode) {
+     if (code < 128 && strlen(kdo_4_codes[code]) > 0) return kdo_4_codes[code];
+  } else {
+     if (code < 128 && strlen(kdo_5_codes[code]) > 0) return kdo_5_codes[code];
+  }
   fprintf(stderr, "ERROR: code %d kann nicht uebersetzt werden\n", code);
   return (char *) NULL;
 }
@@ -106,14 +127,14 @@ static char * prepare_output_line(char *marke, char *kdo, int adresse, int ch) {
 
 
 void usage(char * Program) {
-   fprintf(stderr, "%s - Ein Kommandozeilen Disassembler fuer boris4 - Programme\n\n",Program);
+   fprintf(stderr, "%s - Ein Kommandozeilen Disassembler fuer boris4/5 - Programme\n\n",Program);
    fprintf(stderr, "Bitteschoen: %s [-lxv] [-o outfile] Eingabedatei\n",Program);
    fprintf(stderr, "     -l          Alle Zeilennummern ausgeben (default: nur als Marken benutzte)\n");
-   fprintf(stderr, "     -v          Verbose mode\n");
+   fprintf(stderr, "     -v          geschwaetziger modus\n");
+   fprintf(stderr, "     -4          boris4 - modus (default: boris5)\n");
    fprintf(stderr, "     -x          Hexcode als Kommentar hinzufuegen\n");
    fprintf(stderr, "     -o Datei    Ausgabe in eine Datei (default: stdout)\n");
 }
-
 
 int main(int argc, char * argv[]) {
      FILE* file_in;
@@ -140,10 +161,11 @@ int main(int argc, char * argv[]) {
      statflag_file_output = 0;
      statflag_line_output = 0;
      statflag_verbose_mode = 0;
+     statflag_boris4_mode = 0;
      
      opterr = 0;
 
-     while ((c = getopt (argc, argv, (const char *) "lxhvo")) != -1) {
+     while ((c = getopt (argc, argv, (const char *) "lxhv4o")) != -1) {
         switch (c)
           {
           case 'x':
@@ -151,6 +173,9 @@ int main(int argc, char * argv[]) {
             break;
           case 'v':
             statflag_verbose_mode = 1;
+            break;
+          case '4':
+            statflag_boris4_mode = 1;
             break;
           case 'o':
             statflag_file_output = 1;
@@ -173,7 +198,11 @@ int main(int argc, char * argv[]) {
 
       if (statflag_verbose_mode) {
          fprintf (stderr, "statflag_hex_output = %d, statflag_file_output = %d\n", statflag_hex_output, statflag_file_output);
-
+         if (statflag_boris4_mode) {
+            fprintf (stderr, "Boris-4 modus\n");
+         } else {
+            fprintf (stderr, "Boris-5 modus\n");
+         }
          fprintf (stderr, "optind = %d, argc = %d\n", optind, argc);
 
          for (index = optind; index < argc; index++) {
