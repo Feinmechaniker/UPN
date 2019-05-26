@@ -32,7 +32,21 @@
 int statflag_file_output;
 int statflag_verbose_mode;
 int statflag_fill_nop_mode;
+int statflag_boris4_mode;
 
+
+/* Funktionsprototypen */
+
+unsigned short get_cmd_cde(char * code);
+
+int is_comment(char *line);
+int is_empty_line(char *line);
+int isWspace (char p_zeichen);
+
+int main(int argc, char * argv[]);
+int needs_adress(char code);
+
+void usage(char * Program);
 
 // --------------------------------------------------
 // test if char is a whitespace
@@ -80,8 +94,15 @@ int is_comment(char *line) {
 // --------------------------------------------------
 // Welche Kommandos brauchen eine Adresse ?
 int needs_adress(char code) {
- if (code ==  7 || code == 8 || code == 10 || code == 11 || code == 18 || code == 19 || code == 20 || code == 21 || code == 69 || code == 74 || code == 75 || code == 76 || code == 112 || code == 126) return 1;
- return 0;
+   if (statflag_boris4_mode) {
+       if (code ==  7 || code == 8 || code == 10 || code == 11 || code == 18 || code == 19 || code == 20 \
+                      || code == 21 || code == 69 || code == 74 || code == 75 || code == 76 || code == 112 || code == 126) return 1;
+   } else {
+       if (code == 7 || code == 8 || code == 10 || code == 11 || code == 18 || code == 19 || code == 20 \
+                      || code == 21 || code == 69 || code == 74 || code == 75 || code == 76 || code == 112 || code == 116 \
+                      || code == 117 || code == 118 || code == 119 || code == 120 || code == 121 || code == 126) return 1;
+   }
+   return 0;
 }
 
 
@@ -91,7 +112,11 @@ unsigned short get_cmd_cde(char * code) {
   int i;
 
   for(i=0;i<128;i++) {
-     if (!strcmp(code, kdo_codes[i])) return i;
+     if (statflag_boris4_mode) {
+        if (!strcmp(code, kdo_4_codes[i])) return i;
+     } else {
+        if (!strcmp(code, kdo_5_codes[i])) return i;
+     }
   }
   fprintf(stderr, "ERROR: Kommando >%s< kann nicht uebersetzt werden\n", code);
   return 255;
@@ -99,10 +124,11 @@ unsigned short get_cmd_cde(char * code) {
 
 
 void usage(char * Program) {
-   fprintf(stderr, "%s - Ein Kommandozeilen Assembler fuer boris4 - Programme\n\n",Program);
-   fprintf(stderr, "Bitteschoen: %s [-v] [-n] [-o outfile] Eingabedatei\n",Program);
+   fprintf(stderr, "%s - Ein Kommandozeilen Assembler fuer boris4/5 - Programme\n\n",Program);
+   fprintf(stderr, "Bitteschoen: %s [-v] [-n] [-4] [-o outfile] Eingabedatei\n",Program);
    fprintf(stderr, "     -n          Datei mit NOP auffuellen\n");
-   fprintf(stderr, "     -v          Verbose mode\n");
+   fprintf(stderr, "     -v          geschwaetziger modus\n");
+   fprintf(stderr, "     -4          boris4 - modus (default: boris5)\n");
    fprintf(stderr, "     -o Datei    Ausgabe in eine Datei (default: stdout)\n");
 }
 
@@ -114,7 +140,6 @@ int main(int argc, char * argv[]) {
      char kdo[8];
      char *s;
      int c, i, a;
-     int ch;
 
      int adresse;
      int zeile;
@@ -131,16 +156,19 @@ int main(int argc, char * argv[]) {
      statflag_file_output = 0;
      statflag_verbose_mode = 0;
      statflag_fill_nop_mode = 0;
+     statflag_boris4_mode = 0;
 
      s = line;
      a = 0;
-     ch = 0;
 
-     while ((c = getopt (argc, argv, (const char *) "nhvo")) != -1) {
+     while ((c = getopt (argc, argv, (const char *) "nh4vo")) != -1) {
         switch (c)
           {
           case 'v':
             statflag_verbose_mode = 1;
+            break;
+          case '4':
+            statflag_boris4_mode = 1;
             break;
           case 'n':
             statflag_fill_nop_mode = 1;
@@ -164,6 +192,12 @@ int main(int argc, char * argv[]) {
       if (statflag_verbose_mode) {
          fprintf (stderr, "statflag_file_output = %d\n", statflag_file_output);
 
+         if (statflag_boris4_mode) {
+            fprintf (stderr, "Boris-4 modus\n");
+         } else {
+            fprintf (stderr, "Boris-5 modus\n");
+         }
+
          for (index = optind; index < argc; index++) {
            fprintf (stderr, "Non-option argument %s\n", argv[index]);
          }
@@ -172,7 +206,7 @@ int main(int argc, char * argv[]) {
       index = optind;
 
       if (index >= argc) {
-          fprintf (stderr, "Parameterfehler\n");
+          fprintf (stderr, "Aufruffehler : Parameter\n");
           usage(argv[0]);
           return 1;
       }
@@ -181,7 +215,7 @@ int main(int argc, char * argv[]) {
         strcpy(outfile, argv[index]);
         index++;
         if (index >= argc) {
-          fprintf (stderr, "Parameterfehler\n");
+          fprintf (stderr, "Aufruffehler : Parameter\n");
           usage(argv[0]);
           return 1;
         }
@@ -222,10 +256,10 @@ int main(int argc, char * argv[]) {
          while (fgets(s, 255, file_in) != NULL) {
             if (!is_comment(line)) {
                if (isWspace (line[0])){
-                  i = sscanf(s, " %s %d", &kdo, &adresse);
+                  i = sscanf(s, " %s %d", kdo, &adresse);
                   i++;
                } else {
-                  i = sscanf(s, "%d %s %d", &zeile, &kdo, &adresse);
+                  i = sscanf(s, "%d %s %d", &zeile, kdo, &adresse);
                   // Fehlerbehandlung bzw Markenverschiebung
                   if (a != zeile) {
                       fprintf(stderr, "WARNING: Adressabweichung in Zeile %d (%d)\n", a, zeile);
