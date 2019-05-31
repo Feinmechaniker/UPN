@@ -364,7 +364,7 @@ int send_datablock (SERIALPORT com_fd, char * datablock) {
 //         1 = ein fehler
 // Parameter: Filedescriptor der Schnittstelle, Input oder AUsgabedatei
 ==================================================================== */
-int upload_file(SERIALPORT com_fd, char * infile) {
+int upload_file(SERIALPORT com_fd, char * infile, int startadr) {
 
    char ch;
    int i,j;
@@ -401,6 +401,9 @@ int upload_file(SERIALPORT com_fd, char * infile) {
    blocknummer = 0;
    bytecount = i; // Groesse der Eingabedatei
 
+   if (statflag_verbose_mode)
+           fprintf(stderr, "Datei (%d Bytes) gelesen\n", bytecount);
+
    j = 0; // da zaehlen wir die geschriebenen Bytes
 
    inptr = inputdata;
@@ -413,7 +416,7 @@ int upload_file(SERIALPORT com_fd, char * infile) {
          j++;
       }
 
-      if (j == bytecount) fini = 1; // Das wird der letzte Block
+      if (j >= bytecount) fini = 1; // Das wird der letzte Block
 
       while (i<8) {
          wrk[i++] = 0;
@@ -421,7 +424,7 @@ int upload_file(SERIALPORT com_fd, char * infile) {
       }
 
       if (blocknummer == 0) {
-         prepare_data_block(0, 1, 0, wrk, datablock, 0);
+         prepare_data_block(0, 1, 0, wrk, datablock, startadr);
 
          i = send_datablock (com_fd, datablock);
          if (statflag_verbose_mode)
@@ -665,6 +668,8 @@ int main(int argc, char * argv[]) {
    char startadr_str[64];
    int startadr;
 
+   startadr = 0;
+
    while ((c = getopt (argc, argv, (const char *) "udrf:s:vh")) != -1) {
         switch (c)
           {
@@ -784,7 +789,7 @@ int main(int argc, char * argv[]) {
              if (statflag_verbose_mode)
                 fprintf(stderr, "%c (%d Zeichen) Kommando gesendet\n", Zeichen, i);
           
-             if (upload_file(com_fd, infile) != 0) {
+             if (upload_file(com_fd, infile, startadr) != 0) {
                  fprintf(stderr, "Upload zu boris fehlgeschlagen\n");
                  return 1;
              } else {
@@ -836,4 +841,23 @@ int main(int argc, char * argv[]) {
    }
    return 0;
 }
+
+
+
+
+
+/*
+
+Now, when you have a COM port open, you may want to send some data to the connected device. For example, let's say you want to send "Hello" to the device (for example, another PC). When you want to send the data across the serial port, you need to write to the serial port just as you would write to a file. You would use following API:
+
+iRet = WriteFile (m_hCommPort,data,dwSize,&dwBytesWritten ,&ov);
+where data contains "Hello".
+
+Let's say that, in response to your "Hello", the device sends you "Hi". So, you need to read the data. Again, you would use the following API:
+
+abRet = ::ReadFile(m_hCommPort,szTmp ,sizeof(szTmp ),&dwBytesRead,&ovRead) ;
+For now, do not try to understand everything. We will get to all this later. All this sounds very simple. Right?
+Now, let's start digging into issues.
+
+*/
 
