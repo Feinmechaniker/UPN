@@ -25,7 +25,7 @@
 
 /* Funktionsprototypen */
 
-char * get_cmd_str(char code);
+char * get_cmd_str(unsigned code);
 
 int needs_adress(char code);
 int needs_mem_adress(char code);
@@ -46,7 +46,15 @@ int statflag_boris4_mode;
 
 // Braucht das Kommando eine Adresse - Zusammenfassung
 int needs_adress(char code) {
- return (needs_mem_adress(code) + needs_prog_adress(code) + needs_param(code));
+char bas_code;
+
+   // Die Index-Codes sind um 128 verschoben
+   if (code < 0) 
+     bas_code = code + 128;
+   else 
+     bas_code = code;
+
+   return (needs_mem_adress(bas_code) + needs_prog_adress(bas_code) + needs_param(bas_code));
 }
 
 // STO und RCL sind Speicherbefehle und brauchen eine Adresse 0..31
@@ -86,12 +94,21 @@ void prep_marke(char * marke, int flag, int a) {
 }                
 
 // Kommandocodes umsetzen
-char * get_cmd_str(char code) {
-  if (code > 127 || code < 0) return (char *) NULL;
+char * get_cmd_str(unsigned code) {
+
+   // if (code <0 ) return (char *) NULL;  // -1 is EOF
+  if (code == -1) {
+     if (statflag_verbose_mode)
+        fprintf(stderr, "mapping EOF %d to END\n", code);
+     code = 126;
+  }
+
   if (statflag_boris4_mode) {
+     if (code > 127) return (char *) NULL;
      if (code < 128 && strlen(kdo_4_codes[code]) > 0) return kdo_4_codes[code];
   } else {
-     if (code < 128 && strlen(kdo_5_codes[code]) > 0) return kdo_5_codes[code];
+     if (code > 255) return (char *) NULL;
+     if (code < 256 && strlen(kdo_5_codes[code]) > 0) return kdo_5_codes[code];
   }
   fprintf(stderr, "ERROR: code %d kann nicht uebersetzt werden\n", code);
   return (char *) NULL;
@@ -271,7 +288,11 @@ int main(int argc, char * argv[]) {
          while (ch != EOF) {
             ch = fgetc(file_in);
             adresse = fgetc(file_in); 
-            kdo =  get_cmd_str((char) ch);
+            // kdo =  get_cmd_str((unsigned) ch);
+
+            // if (statflag_verbose_mode)
+            //     fprintf (stderr, "translated code %d to kdo >%s<\n", ch, kdo);
+
             if (needs_mem_adress(ch)) used_mem[adresse] = 1;
             if (needs_prog_adress(ch)) used_prog[adresse] = 1;
          }
@@ -298,7 +319,11 @@ int main(int argc, char * argv[]) {
          while (ch != EOF) {
             ch = fgetc(file_in);
             adresse = fgetc(file_in); 
-            kdo =  get_cmd_str((char) ch);
+            kdo =  get_cmd_str((unsigned) ch);
+
+            // if (statflag_verbose_mode)
+            //     fprintf (stderr, "translated code %d to kdo >%s<\n", ch, kdo);
+
             if (needs_mem_adress(ch)) used_mem[adresse] = 1;
             prep_marke(marke, used_prog[a], a);                
             if (ch != EOF && adresse != EOF && kdo != NULL) {
