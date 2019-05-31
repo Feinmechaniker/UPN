@@ -11,6 +11,8 @@ Initial version is compatible with
 - boris v 2.15
 - BCommander 
 
+Later versions are compatible with the upgraded boris5 (using command line switch)
+
 Remark: EEPROM dumps of the ATMega EEPROM have a swapped byte order!
 
 terminal - a command line tool to communicate with boris via serial line. needs boris v2.17
