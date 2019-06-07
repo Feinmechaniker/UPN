@@ -8,13 +8,17 @@
 '-----------------------------------------------------------------
 'This sample will be extended to support other chips with bootloader
 'The loader is supported from the IDE
+
 $hwstack = 40
 $swstack = 40
 $framesize = 40
-$crystal = 1000000
-$baud = 9600                                               'this loader uses serial com
-'It is VERY IMPORTANT that the baud rate matches the one of the boot loader
-'do not try to use buffered com as we can not use interrupts
+$crystal = 11059700        ' Boris Voyager Cristal
+$baud = 115200             ' Baudrate for Bootloader
+
+' Fuses
+' Low 0xF7
+' High 0xDC
+' Extended 0xFF
 
 'possible return codes of the PC bootloader.exe
 ' -6005    Cancel requested
@@ -24,10 +28,11 @@ $baud = 9600                                               'this loader uses ser
 ' -6009    Block sequence error in Xmodem
 ' -6016    Session aborted
 
+$regfile="m1284Pdef.dat"
+const loaderchip=1284
 
-
-$regfile = "m328pdef.dat"
-Const Loaderchip = 328
+'$regfile = "m328pdef.dat"
+'Const Loaderchip = 328
 
 '$regfile = "m8def.dat"
 'Const Loaderchip = 8
@@ -73,9 +78,6 @@ Const Loaderchip = 328
 '$regfile = "m644def.dat"
 '$regfile = "m644Pdef.dat"
 'Const Loaderchip = 644
-
-'$regfile="m1284def.dat"
-'const loaderchip=1284
 
 
 '$regfile = "m164Pdef.dat"
@@ -364,8 +366,8 @@ Do_spm:
 !  lds r31,{Z+1}
 
   #if _romsize > 65536
-      lds r24,{Z+2}
-      sts rampz,r24                                         ' we need to set rampz also for the M128
+!      lds r24,{Z+2}
+!      sts rampz,r24                                         ' we need to set rampz also for the M128
   #endif
 
   Spmcsr = Spmcrval                                         'assign register
