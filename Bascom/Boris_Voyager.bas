@@ -35,6 +35,7 @@
 
 ' Programmhistorie
 ' 07.06.19  V. 04.00 Startversion, basierend auf der BORIS Version 3.11
+' 09.06.19  V  04.01 Portkorrekturen entsprechend Schaltung, Timing fuer Polling
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -55,7 +56,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.00"                                  '
+Const K_version = "04.01"                                  '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -76,7 +77,7 @@ Config Serialin = Buffered , Size = 20
 #endif
 
 '-------------------------------------------------------------------------------------
-' SPI-Interface f�r DOGM163-Display
+' SPI-Interface für DOGM163-Display
 
 ' PB0 = CS
 ' PB5 = MOSI
@@ -105,20 +106,22 @@ Set Dog_cs
 Dog_miso = 1                                                'pull up on miso
 
 ' Tastaturmatrix
-' PC4, PC5, PD2-PD7 - Zeilen - Output
+' Voyager Hat Andere Ports , Zeilen A0 -A7
+' Spalten C2-C6
+
 ' Wir steuern mit einer 0
 ' unbenutzte Pins mit pullup auf 5v
 
-Ddrd = &B11111111
-Portd = &B11111111
+Ddra = &B11111111
+Porta = &B11111111
 
-' PC0-PC3 - Spalten - Input, PC4 und PC5 - Output
+' PC2-PC6 - Zeilen - Input
 
-Ddrc = &B00110000
+Ddrc = &B00000000
 Portc = &B11111111
 
-Ddrb.0 = 1                                                  ' PortB.0 steuert die Display-Beleuchtung
-Portb.0 = 1                                                 ' Pullup
+Ddrb.2 = 1                                                  ' PortB.2 steuert die Display-Beleuchtung
+Portb.2 = 1                                                 ' Pullup
 
 ' -JG-
 ' UART-Funktion
@@ -268,8 +271,8 @@ Dim Ee_mem(k_num_mem) As Eram Double                        ' Die persistente Va
 Dim Ee_program_valid As Eram Byte                           ' Der Inhalt des EEPROM koennte etwas sinnvolles sein
 Dim Ee_program(k_num_prg) As Eram Word                      ' Das Programm steht im EEPROM, 255 Speicherzellen 1 Byte code, 1 Byte Adresse
 
-' 7. Für die Programmierung brauchen wir natürlich noch mehr
-Dim P_stack(16) As Byte                                     ' Für die Returns bei GOSUB
+' 7. FÃ¼r die Programmierung brauchen wir natÃ¼rlich noch mehr
+Dim P_stack(16) As Byte                                     ' FÃ¼r die Returns bei GOSUB
 Dim P_sp As Byte                                            ' Stackpointer, eigentlich ein Index
 Dim P_pc As Byte                                            ' Der Programmzeiger, Logisch, 0-254
 Dim P_programming As Bit                                    ' Flag ob wir gerade im Auto- oder Programmiermodus sind
@@ -366,7 +369,7 @@ Const P_loop9 = 57 + K_f_offset                             ' 118   - If $9++ > 
 Const K_ehochx = K_logn + K_f_offset                        ' 77   - e hoch x
 Const P_auto = P_start + K_f_offset                         ' 78   - Umschaltung Run / Program
 Const P_nop = K_clearx + K_f_offset                         ' 79  - No Operation    "cx"
-Const K_pi = K_xhochy + K_f_offset                          ' 80  - Pi    "über x hoch y"
+Const K_pi = K_xhochy + K_f_offset                          ' 80  - Pi    "Ã¼ber x hoch y"
 Const K_lstx = K_chgxy + K_f_offset                         ' 81   - Lstx,
 
 Const K_grd = 48 + K_f_offset                               ' 112  - grd / rad toggle   "0"
@@ -445,7 +448,7 @@ Next Index
 
 W_grdrad = Pi_k / 180.0                                     ' Beim Einschalten verwenden wir grd
 
-' Für den Programmiermodus muessen auch ein paar Variablen initialisiert werden
+' FÃ¼r den Programmiermodus muessen auch ein paar Variablen initialisiert werden
 
 P_stack(1) = 0                                              ' Beim Einschalten geht es bei 0 los
 P_sp = 1
@@ -474,14 +477,13 @@ Call Anzeigen
 Waitms 3000
 
 ' Jetzt den Timer einstellen,
-On Timer0 Polling                                           'Interrupt-Routine für Timer0-Overflow
+On Timer0 Polling                                           'Interrupt-Routine fÃ¼r Timer0-Overflow
 Config Timer0 = Timer , Prescale = 1024                     'Timer-Takt ist Quarz/1024
-' Rechnen wir mal, wir haben 1k Ticks pro sekunde,
-' Vorteiler 1024 ergibt 1024 Interrupts pro Sekunde
-' wenn wir 40 mal in der Sekunde pollen wollen, wäre der Timer auf 256-25 zu setzen
+' Rechnen wir mal, wir haben 11k Ticks pro sekunde,
+' Vorteiler 1024 ergibt 10800 Interrupts pro Sekunde
+' der volle Durchlauf von 255 Schritten ergibt dann etwa 42 Pollings pro Sekunde, das ist OK
 
-Timer0 = 231
-' Timer0 = 206
+Timer0 = 1
 
 Enable Timer0
 Enable Interrupts
@@ -534,7 +536,7 @@ Sub Polling()
   Bcheck = Checkfloat(rx)
   Errx = Bcheck And 5
 
-  If P_goflag = 1 Then                                      ' Wenn ein Programm ausgeführt wird
+  If P_goflag = 1 Then                                      ' Wenn ein Programm ausgefÃ¼hrt wird
 
       Store_kdo_active = 0
 
@@ -588,10 +590,10 @@ Sub Polling()
 
   Else                                                      ' Interaktiv, kein laufendes Programm
 
-      If Pressedkey > 0 And Sleepflag > 1200 Then           ' Ein Knopf im Schlafmodus gedrueckt
+      If Pressedkey > 0 And Sleepflag > 2520 Then           ' Ein Knopf im Schlafmodus gedrueckt
           Pressedkey = 0
           Sleepflag = 0
-          Portb.0 = 1                                       ' Wakeme()
+          Portb.2 = 1                                       ' Wakeme()
           Goto Weiter
       End If
 
@@ -618,7 +620,7 @@ Sub Polling()
 
       ' Hier ist jetzt zu unterscheiden,
       ' Moegliche Eingaben sind:
-      '  * Ziffern und Punkte, das können Zahleneingaben oder Adressen sein
+      '  * Ziffern und Punkte, das kÃ¶nnen Zahleneingaben oder Adressen sein
       '  * Kommandos, die gehen entweder in den Programmspeicher oder an den Interpreter.
       '               Aber erst, wenn Sie komplett sind
       '               Kommandos gibt es in 3 Formen
@@ -700,7 +702,7 @@ Sub Polling()
       ' SO, hier ist jetzt alles aufbereitet.
       ' Jetzt muss nur noch:
       '   a) der Prozessor gerufen werden mit X_kommando und X_adresse
-      '   oder b) der schmuseputz in den Programmspeicher geschrieben werden. In diesem Fall muss die Ziffer natürlich dazu
+      '   oder b) der schmuseputz in den Programmspeicher geschrieben werden. In diesem Fall muss die Ziffer natÃ¼rlich dazu
 
       If P_programming = 0 Or Transp_kdo = 1 Then           ' 0 =  Auto, 1 = Programmiermodus
          If Is_ziffer = 0 Then                              ' Die letzte Eingabe war ein Kommando oder die Adresseingabe ist abgeschlossen
@@ -765,28 +767,26 @@ Sub Polling()
 
     ' Wenn lange kein Knopf gedrueckt wurde, schalten wir die Anzeige auf "Sleep",
     ' Alles aus, nur der allerletzte Dezimalpunkt ist an
-    ' Der Timeout (etwa 1 Minute ist hier hartcodiert
+    ' Der Timeout (etwa 1 Minute ist hier hartcodiert 42 * 60
     If Inv_key = 0 Then                                     ' Wenn wir auf die Eingabe nach dem "F" warten, schlafen wir nicht
-       If Sleepflag = 1200 Then
-          Portb.0 = 0                                       ' Dosleep()
+       If Sleepflag = 2520 Then
+          Portb.2 = 0                                       ' Dosleep()
        End If
 
        Incr Sleepflag
 
-       If Sleepflag > 1200 Then
-           Sleepflag = 1201
+       If Sleepflag > 2520 Then
+           Sleepflag = 2521
        End If
     End If
 
   Weiter:
 
-  ' Im Run-Modus können wir schneller sein!
+  ' Im Run-Modus koennen wir schneller sein!
   If P_goflag = 1 Then
      Timer0 = 253                                           '256-3
-     ' Timer0 = 231                                           '256-25
   Else
-     Timer0 = 231                                           '256-25
-     ' Timer0 = 206                                           '256-50
+     Timer0 = 1                                             'Voller Zyklus
   End If
 End Sub Polling
 
@@ -917,7 +917,7 @@ End Function Needs_adress
 
 ' ========================================================================
 ' Ist das eingegeben Kommando ein "transparentes"?
-' d.h. es wird nicht im Programmspeicher abgelegt, sondern gleich ausgeführt
+' d.h. es wird nicht im Programmspeicher abgelegt, sondern gleich ausgefÃ¼hrt
 ' ========================================================================
 Function Is_transparent(inputkey As Byte) As Byte
    Is_transparent = 0
@@ -1104,7 +1104,7 @@ Sub Display_status_line()
     T_st(7) = To_digit(p_pc Mod 10)
 
     T_st(3) = D_char_eq
-    If P_goflag = 1 Then                                    ' Wenn ein Programm ausgeführt wird  Anzeige Stacklevel
+    If P_goflag = 1 Then                                    ' Wenn ein Programm ausgefÃ¼hrt wird  Anzeige Stacklevel
        T_st(5) = "S"
        T_st(4) = "L"
        T_st(2) = To_digit(p_sp \ 10)
@@ -1184,7 +1184,7 @@ End Sub Display_error
 
 ' ========================================================================
 ' Die Anzeigefunktion, wir interpretieren Ry und Rx in das V_st und W_st Register
-' Im Programmiermodus wird der zum PC gehörige Programmspeicher angezeigt
+' Im Programmiermodus wird der zum PC gehÃ¶rige Programmspeicher angezeigt
 ' ========================================================================
 Sub Interpr_xy()
    Local N As Byte
@@ -1337,7 +1337,7 @@ Sub Interpr_reg(byval Reg As Double)
               Decr Ij
            End If
 
-           While Ij > 0 And Fixfrac > 0.0                   ' Es sind noch stellen in der Anzeige verfügbar
+           While Ij > 0 And Fixfrac > 0.0                   ' Es sind noch stellen in der Anzeige verfÃ¼gbar
                Fixfrac = Fixfrac * 10.0
                Fixi = Int(fixfrac)
                Fixint = Fixi
@@ -1530,7 +1530,7 @@ Sub Display_code()
    Next Nc
 
    Incr P_pc
-   If P_pc > K_num_prg Or P_pc = 0 Then P_pc = 1            ' Wir rollen einfach über
+   If P_pc > K_num_prg Or P_pc = 0 Then P_pc = 1            ' Wir rollen einfach Ã¼ber
    Code_word = Ee_program(p_pc)                             ' Eigentlich muessten wir das ding jetzt um 1 verringern und dann um 1 erhoehen
    Call Display_code_line(code_word)
    W_st(16) = D_char_pfr
@@ -1540,7 +1540,7 @@ Sub Display_code()
    Next Nc
 
    Incr P_pc
-   If P_pc > K_num_prg Or P_pc = 0 Then P_pc = 1            ' Wir rollen einfach über
+   If P_pc > K_num_prg Or P_pc = 0 Then P_pc = 1            ' Wir rollen einfach Ã¼ber
    Code_word = Ee_program(p_pc)                             ' Eigentlich muessten wir das ding jetzt um 1 verringern und dann um 1 erhoehen
    Call Display_code_line(code_word)
 
@@ -1858,9 +1858,9 @@ End Sub Clear_t_st()
 Sub Beepme()
    If P_goflag = 0 Then                                     ' Nur im Interaktiven Modus
       Disable Interrupts
-      Portb.0 = 0                                           ' Dosleep()
+      Portb.2 = 0                                           ' Dosleep()
       Waitms 100
-      Portb.0 = 1                                           ' Wakeme()
+      Portb.2 = 1                                           ' Wakeme()
       Enable Interrupts
    End If
 End Sub Beepme
@@ -1886,7 +1886,7 @@ Sub Pause1s()
 
    Waitms 1000
 
-   Portb.0 = 1
+   Portb.2 = 1
    Call Display_status_line()
    Call Anzeigen()
 
@@ -1916,7 +1916,7 @@ Sub Anzeigen()
 
    ' Die Statuszeile
    For N_1 = 1 To 16
-      N_2 = 17 - N_1                                        ' Schleife über die einzelnen Zeichen und Ausgeben zum Display
+      N_2 = 17 - N_1                                        ' Schleife Ã¼ber die einzelnen Zeichen und Ausgeben zum Display
       ' Hier jetzt noch der Geist
       Spidata = T_st(n_2)
       Call Sendspi2display(spidata)
@@ -1930,7 +1930,7 @@ Sub Anzeigen()
    Dog_ds = 1                                               ' Jetzt kommen wirkliche Zeichen!
 
    For N_1 = 1 To 16
-      N_2 = 17 - N_1                                        ' Schleife über die einzelnen Zeichen und Ausgeben zum Display
+      N_2 = 17 - N_1                                        ' Schleife Ã¼ber die einzelnen Zeichen und Ausgeben zum Display
       ' Hier jetzt noch der Geist
       Spidata = V_st(n_2)
       Call Sendspi2display(spidata)
@@ -1944,7 +1944,7 @@ Sub Anzeigen()
    Dog_ds = 1                                               ' Jetzt kommen wirkliche Zeichen!
 
    For N_1 = 1 To 16
-      N_2 = 17 - N_1                                        ' Schleife über die einzelnen Zeichen und Ausgeben zum Display
+      N_2 = 17 - N_1                                        ' Schleife Ã¼ber die einzelnen Zeichen und Ausgeben zum Display
       ' Hier jetzt noch der Geist
       Spidata = W_st(n_2)
       Call Sendspi2display(spidata)
@@ -2019,7 +2019,7 @@ Function Exec_kdo() As Byte
     L_adr = X_adresse + 1                                   ' Arbeitsadresse, In BASCOM geht der Index ab 1
 
     If Z_inputflag = 1 Then                                 ' Vor dem Kommando wurden Ziffern eingegeben, wir muessen die Eingabe nach x uebersetzen
-       If X_kommando = K_clearx Then                        ' Löschen während der Zahleneingabe, hat nur Auswirkungen auf das Eingaberegister, nicht auf Rx
+       If X_kommando = K_clearx Then                        ' LÃ¶schen wÃ¤hrend der Zahleneingabe, hat nur Auswirkungen auf das Eingaberegister, nicht auf Rx
             Call Clear_input                                ' Eingaberegister leeren
             Call Clear_output
             Call Anzeigen
@@ -2228,7 +2228,7 @@ Function Exec_kdo() As Byte
            If P_pc > 0 Then Decr P_pc
       Case P_vor                                            ' Ein Schritt vorwarets im Programmspeicher
            Incr P_pc
-           If P_pc >= K_num_prg Then P_pc = 0               ' Wir rollen einfach über
+           If P_pc >= K_num_prg Then P_pc = 0               ' Wir rollen einfach Ã¼ber
       Case P_goto                                           ' Den Programmzeiger auf die Adresse stellen
            P_pc = X_adresse
            Call Beepme
@@ -2246,7 +2246,7 @@ Function Exec_kdo() As Byte
            Call Beepme
       Case P_return
            P_pc = P_stack(p_sp)
-           Incr P_pc                                        ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+           Incr P_pc                                        ' Wenn sich der P_cp Ã¤ndert, incrementiert die Automatik den P_pc nicht, daher hier explizit
            If P_sp > 1 Then
               Decr P_sp
            Else
@@ -2296,7 +2296,7 @@ Function Exec_kdo() As Byte
                  Call Interpr_xy()
                  Exec_kdo = 1                               ' Ein wenig wie Error, wenn wir dann im Polling weitermachen direkt zum weiter
               Else
-                 P_sp = 1                                   ' Stackpointer zurücksetzen bei Programmstart
+                 P_sp = 1                                   ' Stackpointer zurÃ¼cksetzen bei Programmstart
               End If
            End If
            Call Beepme
@@ -2314,7 +2314,7 @@ No_execution:
     X_adresse = &HFF
 
 Finish_kdo:
-    ' Das Kommando koennte den Inhalt von "Rx" geändert haben, wir uebertragen den Inhalt in die Anzeige
+    ' Das Kommando koennte den Inhalt von "Rx" geÃ¤ndert haben, wir uebertragen den Inhalt in die Anzeige
     Call Interpr_xy()
 
     Z_inputflag = 0                                         ' Kommando abgeschlossen, jetzt koennen wieder Ziffern kommen
@@ -2431,7 +2431,7 @@ Function Key2kdo(incode As Byte) As Byte
 
 
    ' im HEX-Darstellungsmodus bekommen die Sinus-tan und ln-sqrt eine andere Funktion,
-   ' nämlich der Zifferneingabe für A-F
+   ' nÃ¤mlich der Zifferneingabe fÃ¼r A-F
 
    If Ee_fixflag = S_disp_hex Then                          ' Wenn wir im Hex-modus sind, nur Integer
      Select Case Incode
@@ -2606,53 +2606,37 @@ End Function Encode_kdo
 ' ========================================================================
 ' Eingabefunktion von der Tastenmatrix - machen wir was draus
 ' Tastaturmatrix
-' PC4, PC5, PD2-PD7 - Zeilen - Output
+' PA0-PA7 - Zeilen - Output
 ' Wir steuern mit einer 0
-' PC0-PC3 - Spalten - Input,
+' PC2-PC6 - Spalten - Input,
 ' Ueberarbeitete Funktion, die Spalten werden richtig interpretiert
 ' ========================================================================
 Function Inmaxkey() As Byte
-   Local L As Byte                                          ' Zeilenzähler laeuft von 0 bis 7
-   Local L3 As Byte                                         ' Zeilenzähler laeuft von 0 bis 7
+   Local L As Byte                                          ' Zeilenzaehler laeuft von 0 bis 7
+   Local L3 As Byte                                         ' Zeilenzaehler laeuft von 0 bis 7
    Local I As Byte
-   Local K As Byte                                          ' Eingabe von den Spalten, hier kann eine 0, 1, 2, 4  oder 8 ankommen
-   Local K3 As Byte                                         ' Eingabe von den Spalten, hier kann eine 0, 1, 2, 4  oder 8 ankommen
+   Local K As Byte                                          ' Eingabe von den Spalten, hier kann eine 0, 1, 2, 4, 8 oder 16 ankommen
+   Local K3 As Byte                                         ' Eingabe von den Spalten, hier kann eine 0, 1, 2, 4, 8 oder 16 ankommen
 
    I = 1                                                    ' Indexbyte, hier schieben wir eine 1 drurch
    Inmaxkey = 0
 
    For L = 0 To 7
-     ' Vorbereitung, wir geben auf eine der Zeilen eine 0
-     Portc.4 = 1
-     Portc.5 = 1
-     Portd = &HFF
-
-     ' 0 -> C4
-     If L = 0 Then                                          ' Entweder C4/C5
-        Portc.4 = 0
-     End If
-     ' 1 -> C5
-     If L = 1 Then
-        Portc.5 = 0
-     End If
-     ' 2-7, wir nehmen die durch das I-Register geschobene 1
-     If L > 1 Then                                          ' oder D2-D7
-       Portd = Not I
-     End If
-
+       Porta = Not I
      ' K liest die C-Ports aus
-     K = Pinc
-     ' Einer könnte eine 0 haben, invertieren, damit es eine 1 wird
-     K = Not K
-     ' Wir brauchen die stellen 0-3
-     K = K And &B00001111
-     If K > 0 Then                                          ' Wenn ein Knopf gedrueckt wurde
-          For L3 = 0 To 3
-             K3 = K And &B00000001
+      K = Pinc
+      ' Einer koennte eine 0 haben, invertieren, damit es eine 1 wird
+      K = Not K
+      ' Wir brauchen die stellen 2-6
+      K = K And &B01111100
+
+      If K > 0 Then                                         ' Wenn ein Knopf gedrueckt wurde
+          For L3 = 0 To 4
+             K3 = K And &B00000100
              If K3 <> 0 Then
-               L = L * 4                                    ' Wenn wir eine Taste haben, brauchen wir auch nicht weitermachen
+               L = L * 5                                    ' Wenn wir eine Taste haben, brauchen wir auch nicht weitermachen
                Inmaxkey = L + L3
-               ' Die Keycodes laufen jetzt von 0-31, um die 0 als NOKEY zu erkennen, machen wir +1
+               ' Die Keycodes laufen jetzt von 0-39, um die 0 als NOKEY zu erkennen, machen wir +1
                Incr Inmaxkey
              End If
              Shift K , Right
@@ -2691,7 +2675,7 @@ End Sub Update_cache
 ' -JG-
 
 ' ========================================================================
-' Den String "Con" für "connect" in die Anzeige schreiben
+' Den String "Con" fÃ¼r "connect" in die Anzeige schreiben
 ' Conect
 ' ========================================================================
 Sub Display_con()
@@ -2744,7 +2728,7 @@ Sub Display_save()
 End Sub Display_save
 
 ' ========================================================================
-' PC empfängt Binärdaten (Programspeicher von Boris) - keine Fehlerbehandlung
+' PC empfÃ¤ngt BinÃ¤rdaten (Programspeicher von Boris) - keine Fehlerbehandlung
 ' ========================================================================
 Sub File_receive()
    Local I As Byte
@@ -2763,7 +2747,7 @@ End Sub File_receive
 
 
 ' ========================================================================
-' PC sendet Binärdaten an Boris, abspeichern im Programspeicher - keine Fehlerbehandlung
+' PC sendet BinÃ¤rdaten an Boris, abspeichern im Programspeicher - keine Fehlerbehandlung
 ' ========================================================================
 Sub File_send()
    Local I As Byte                                          ' Counter
@@ -2774,11 +2758,11 @@ Sub File_send()
    Call Display_load                                        ' Anzeige "Load"
    For I = 1 To 25                                          ' kompletter Speicherinhalt (512 Byte)
     Do
-    Loop Until Ucsr0a.rxc0 = 1                              ' warten bis nächste Zeichen empfangen (immer High - Low)
+    Loop Until Ucsr0a.rxc0 = 1                              ' warten bis nÃ¤chste Zeichen empfangen (immer High - Low)
     Code = Udr                                              ' High-Teil
     Zeichen = Code * 256
     Do
-    Loop Until Ucsr0a.rxc0 = 1                              ' warten bis nächste Zeichen empfangen
+    Loop Until Ucsr0a.rxc0 = 1                              ' warten bis nÃ¤chste Zeichen empfangen
     Code = Udr                                              ' Low-Teil
     Zeichen = Zeichen + Code
     Buffer(i) = Zeichen                                     ' Zwischenspeichern
@@ -2797,14 +2781,14 @@ End Sub File_send
 
 ' ========================================================================
 ' Protokolliges Empfangen von einem Datenblock mit Pruefsumme und Quittung
-' Wir bekommen ein Paket von 12 Binär-Bytes
+' Wir bekommen ein Paket von 12 BinÃ¤r-Bytes
 '
 '   // Byte 0: Blocknummer, zaehlt hoch
 '   // Byte 1: Verwendung
 '   //          01 - Info-Block, wird nicht gespeichert
 '   //          02 - Programmblock
 '   // Byte 2-9 Datenbytes
-'   // Byte 10 Niederes Byte der Summe über 0-9
+'   // Byte 10 Niederes Byte der Summe Ã¼ber 0-9
 '   // Byte 11 Folgekennzeichen
 '   //          0x0F - Es folgt ein weiterer Datenblock
 '   //          0xFF - Dateiende
@@ -2816,7 +2800,7 @@ End Sub File_send
 '   //          01 - Info-Block, wird nicht gespeichert
 '   // Byte 2 Startadresse des Programme im Speicher
 '   // Byte 3-9 Label zur Anzeige im Display o.ae
-'   // Byte 10 Niederes Byte der Summe über 0-9
+'   // Byte 10 Niederes Byte der Summe Ã¼ber 0-9
 '   // Byte 11 Folgekennzeichen = 0x0F
 '
 ' Wenn der Block sauber angekommen ist, Quittieren wir mit 2 Bytes
@@ -3001,7 +2985,7 @@ End Sub Download_file
 '   // Byte 2 Startadresse des Programme im Speicher
 '   // Byte 3 Programmgroesse
 '   // Byte 4 Boris-Version
-'   // Byte 10 Niederes Byte der Summe über 0-9
+'   // Byte 10 Niederes Byte der Summe Ã¼ber 0-9
 '   // Byte 11 Folgekennzeichen = 0x0F
 Sub Download_headerblock(byval Size As Byte)
 
@@ -3092,7 +3076,7 @@ End Sub Run_program
 #endif
 
 ' ========================================================================
-' UART-Funktion zum Senden und Empfangen von Zeichen über die UART
+' UART-Funktion zum Senden und Empfangen von Zeichen Ueber die UART
 ' ========================================================================
 Sub Uart()
    Local Zeichen As Byte
@@ -3111,17 +3095,17 @@ Sub Uart()
     Do
       Waitms 10
       Zeichenflag = Ischarwaiting()
-    Loop Until Zeichenflag = 1                              ' warten bis nächste Zeichen empfangen (immer High - Low)
+    Loop Until Zeichenflag = 1                              ' warten bis nÃ¤chste Zeichen empfangen (immer High - Low)
     Zeichen = Inkey()                                       ' High-Teil
 #else
     Do
-    Loop Until Ucsr0a.rxc0 = 1                              ' wartenn bis nächste Zeichen empfangen
+    Loop Until Ucsr0a.rxc0 = 1                              ' wartenn bis nÃ¤chste Zeichen empfangen
     Zeichen = Udr                                           ' Zeichen aus dem UART-Puffer lesen
 #endif
 
     Select Case Zeichen                                     ' Auswertung des Kommandos
-     Case &H53 : Call File_send                             ' sendet Programspeicher zum PC (Binärdaten)
-     Case &H52 : Call File_receive                          ' empfängt Binärdaten vom PC für Programspeicher
+     Case &H53 : Call File_send                             ' sendet Programspeicher zum PC (BinÃ¤rdaten)
+     Case &H52 : Call File_receive                          ' empfÃ¤ngt BinÃ¤rdaten vom PC fÃ¼r Programspeicher
 #if Block_communication = 1
      Case &H54 : Call Upload_file                           ' Blockweise routine PC -> boris
      Case &H55 : Call Download_file                         ' Blockweise Routine boris -> PC
