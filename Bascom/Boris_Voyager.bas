@@ -36,6 +36,7 @@
 ' Programmhistorie
 ' 07.06.19  V. 04.00 Startversion, basierend auf der BORIS Version 3.11
 ' 09.06.19  V  04.01 Portkorrekturen entsprechend Schaltung, Timing fuer Polling
+' 09.06.19  V  04.02 Neue Query_keypad-Funktion
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -43,6 +44,7 @@ $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega12
 $prog &HFF , &H62 , &HD9 , &HFF                             ' generated. Take care that the chip supports all fuse bytes.
 
 $crystal = 11059700                                         ' Quarzfrequenz 11.0597 MHz
+
 $baud = 115200                                              ' Baudrate der UART: 115200 Baud
 
 ' Echo Off
@@ -56,14 +58,14 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.01"                                  '
+Const K_version = "04.02"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
 ' Const Hp29c_comp = 0 ' Rt wird mit "0" initialisiert
 
 ' Compile-Switch ob das Display mit 3.3V (0) oder 5V (1) betrieben wird
-Const Dog_5v_comp = 0
+Const Dog_5v_comp = 1
 
 
 ' Mit dem folgenden Compile-Switch werden die Blockladefunktionen / Remotestart enabled.
@@ -79,17 +81,17 @@ Config Serialin = Buffered , Size = 20
 '-------------------------------------------------------------------------------------
 ' SPI-Interface für DOGM163-Display
 
-' PB0 = CS
-' PB5 = MOSI
+' PB0 = CS  *
+' PB5 = MOSI *
 ' PB6 = MISO
-' PB7 = SCK
-' PB1 = RS (data select)                                    ' 0: Instruction register (for write)
+' PB7 = SCK   *
+' PB1 = RS (data select)  *                                  ' 0: Instruction register (for write)
                                                             ' 1: Data register (for write and read)
 ' PB2 = Dimmen
 
 Dog_cs Alias Portb.0                                        ' chip select, low = active
 Dog_ds Alias Portb.1                                        ' data select, 0 = commando 1 = daten
-Dog_mosi Alias PortB.5                                      ' MOSI
+Dog_mosi Alias Portb.5                                      ' MOSI
 Dog_miso Alias Portb.6                                      ' MISO
 Dog_clk Alias Portb.7                                       ' clock
 
@@ -97,9 +99,11 @@ Config Dog_mosi = Output
 Config Dog_miso = Input
 Config Dog_clk = Output
 Config Dog_cs = Output
+Config Dog_ds = Output
 
 ' Hardware-SPI
 Config Spi = Hard , Interrupt = Off , Data_order = Msb , Master = Yes , Polarity = High , Phase = 1 , Clockrate = 4 , Noss = 1
+
 Spiinit
 
 Set Dog_cs
@@ -109,21 +113,25 @@ Dog_miso = 1                                                'pull up on miso
 ' Voyager Hat Andere Ports , Zeilen A0 -A7
 ' Spalten C2-C6
 
-' Wir steuern mit einer 0
-' unbenutzte Pins mit pullup auf 5v
+Config Debounce = 10                                        ' when the config statement is not used a default of 25mS
 
-Ddra = &B11111111
-Porta = &B11111111
 
-' PC2-PC6 - Zeilen - Input
+' -----------------------------------------------------------------------------
+' Keyboard Port declarations
+' -----------------------------------------------------------------------------
 
-Ddrc = &B00000000
-Portc = &B11111111
+' Keypad Column PC2 - PC6
+DDRC = &B01111100                                           ' PC2-PC6 as Output
+
+' Keypad Row PA0 - PA7
+DDRA = &B0000000                                            ' all Pins as Input
+PORTA = &B111111111                                         ' all Pins pull-up
+
 
 Ddrb.2 = 1                                                  ' PortB.2 steuert die Display-Beleuchtung
 Portb.2 = 1                                                 ' Pullup
 
-' -JG-
+
 ' UART-Funktion
 Const Uart_sync = &HAA                                      ' Synchron-Byte
 
@@ -141,7 +149,7 @@ Const S_disp_hex = 4                                        ' Displaymodus hex
 ' ========================================================================
 Declare Sub Polling()                                       ' Interrupt-Routine, Tastaturabfrege und Eingabeinterpretation
 
-Declare Function Inmaxkey() As Byte                         ' Tastaturmatrix abfragen
+Declare Function Query_keypad() As Byte                     ' determines keyboard code
 Declare Function Key2kdo(incode As Byte) As Byte            ' Key decodieren
 Declare Function Digit_input(byval Inputkey As Byte) As Byte       ' Unterscheiden Ziffer oder Kommando
 Declare Function Needs_adress(inputkey As Byte) As Byte     ' Wieviel Adressziffern braucht das Kommando?
@@ -243,6 +251,9 @@ Dim I_pt As Byte                                            ' Eingabe-Pointer
 ' 4. Arbeitsvariablen
 Dim Pressedkey As Byte
 Dim Lstkey As Byte
+Dim Actkey As Byte
+Dim Column as Byte                                          ' Column Counter
+Dim Row as Byte                                             ' Row Counter
 Dim Ziffer_in As Byte
 Dim Index As Byte
 Dim Adr_input_flag As Byte                                  ' Ein Flag, ob und wieviele Adressen erforderlich sind
@@ -490,9 +501,6 @@ Enable Interrupts
 
 
 ' Hier geht der Ernst des Lebens jetzt los
-Call Interpr_xy()
-Call Anzeigen
-
 Do                                                          'Hauptschleife
       Waitms 1000
 
@@ -530,7 +538,8 @@ Sub Polling()
 
   Pc = P_pc + 1
 
-  Tmatrix = Inmaxkey()                                      ' Abfrage der Tastaturmatrix, Return Tastenposition
+  Tmatrix = Query_Keypad()                                      ' Abfrage der Tastaturmatrix, Return Tastenposition
+
   Pressedkey = Key2kdo(tmatrix)                             ' Umwandeln in einen Tastaturcode
 
   Bcheck = Checkfloat(rx)
@@ -1736,29 +1745,24 @@ Sub Show_version()
 
   Vsrx = K_version
 
-  W_st(16) = "b"
+  W_st(16) = "V"
   W_st(15) = "o"
-  W_st(14) = "r"
-  W_st(13) = "i"
-  W_st(12) = "s"
-  W_st(11) = D_space
+  W_st(14) = "y"
+  W_st(13) = "a"
+  W_st(12) = "g"
+  W_st(11) = "e"
+  W_st(10) = "r"
+  W_st(9) = D_space
 
   Vinputlen = Len(vsrx)
 
+  If Vinputlen > 8 Then Vinputlen = 8                       ' Abschneiden wenn laenger als 16 Zeichen
+
   For Vii = 1 To Vinputlen
-    Vij = 10 - Vii
+    Vij = 9 - Vii
     Vposc = Mid(vsrx , Vii , 1)
     W_st(vij) = Vposc
   Next Vii
-
-  Incr Vinputlen
-
-  For Vii = Vinputlen To 16
-    Vij = 10 - Vii
-    W_st(vij) = D_space
-  Next Vii
-
-  ' W_st(1) = &H3D
 
 End Sub Show_version
 
@@ -1909,6 +1913,8 @@ Sub Anzeigen()
    Local Spidata As Byte
    Local Dispadr As Byte
 
+   Dog_ds = 0                                               ' Steuerdaten schreiben, die Adresse
+
    Dispadr = &B10000000                                     ' Wir schreiben erst mal in die Kleinen Zeichen
    Call Sendspi2display(dispadr)                            ' Schreibposition waehlen
 
@@ -1954,8 +1960,9 @@ Sub Anzeigen()
 
 End Sub Anzeigen
 
+
 ' ========================================================================
-' Initialisierung der Anzeige im 3.3V Mode, 3-Zeilig Helligkeit, Modus
+' Initialisierung Der Anzeige Im 3 -zeilig Helligkeit , Modus
 ' ========================================================================
 Sub Init_st7036()                                           ' contr 0...3
    Local Spidata As Byte
@@ -1966,11 +1973,28 @@ Sub Init_st7036()                                           ' contr 0...3
 
    Spidata = &H39 : Call Sendspi2display(spidata)           ' 8bit data, Code page 1
 
+' Compile-Switch ob das Display mit 3.3V (0) oder 5V (1) betrieben wird
+#if Dog_5v_comp = 1
+
+ ' ========================================================================
+ ' 5 V Mode,
+
+   Spidata = &H1D : Call Sendspi2display(spidata)           ' 3 Zeilen Display
+   Spidata = &H50 : Call Sendspi2display(spidata)           ' Buster on, Kontrast
+   Spidata = &H6C : Call Sendspi2display(spidata)           ' Spannungsfolger
+   Spidata = &H7C : Call Sendspi2display(spidata)           ' Kontrast
+
+#else
+
+ ' ========================================================================
+ ' 3.3V Mode,
+
    Spidata = &H15 : Call Sendspi2display(spidata)           ' 3 Zeilen Display
    Spidata = &H55 : Call Sendspi2display(spidata)           ' Buster on, Kontrast
    Spidata = &H6E : Call Sendspi2display(spidata)           ' Spannungsfolger
    Spidata = &H72 : Call Sendspi2display(spidata)           ' Kontrast
 
+#endif
 
    ' Spidata = &H0F : Call Sendspi2display(spidata)           ' Display an, Cursor an, Blink
 
@@ -2602,57 +2626,60 @@ Function Encode_kdo(byval Inputkey As Byte) As String
 End Function Encode_kdo
 
 
-
 ' ========================================================================
-' Eingabefunktion von der Tastenmatrix - machen wir was draus
-' Tastaturmatrix
-' PA0-PA7 - Zeilen - Output
-' Wir steuern mit einer 0
-' PC2-PC6 - Spalten - Input,
-' Ueberarbeitete Funktion, die Spalten werden richtig interpretiert
-' ========================================================================
-Function Inmaxkey() As Byte
-   Local L As Byte                                          ' Zeilenzaehler laeuft von 0 bis 7
-   Local L3 As Byte                                         ' Zeilenzaehler laeuft von 0 bis 7
-   Local I As Byte
-   Local K As Byte                                          ' Eingabe von den Spalten, hier kann eine 0, 1, 2, 4, 8 oder 16 ankommen
-   Local K3 As Byte                                         ' Eingabe von den Spalten, hier kann eine 0, 1, 2, 4, 8 oder 16 ankommen
+' Keyboard polling and debouncing
+' Function and subroutine
+' -----------------------------------------------------------------------------
+Function Query_Keypad() as Byte                             ' needs about 225us
+   Actkey = 0                                               ' clear Keycode
+   For Column = 1 To 5                                      ' all Columns
+      PORTC = &B01111100                                    ' Column Bitmask (PC2-PC6 High)
+      If Column = 1 Then Reset PortC.2
+      If Column = 2 Then Reset PortC.3
+      If Column = 3 Then Reset PortC.4
+      If Column = 4 Then Reset PortC.5
+      If Column = 5 Then Reset PortC.6
+      For Row = 1 To 8                                      ' all Rows
+         Select Case Row
+            Case 1 : Debounce PinA.0 , 0 , Calc_key , Sub
+            Case 2 : Debounce PinA.1 , 0 , Calc_key , Sub
+            Case 3 : Debounce PinA.2 , 0 , Calc_key , Sub
+            Case 4 : Debounce PinA.3 , 0 , Calc_key , Sub
+            Case 5 : Debounce PinA.4 , 0 , Calc_key , Sub
+            Case 6 : Debounce PinA.5 , 0 , Calc_key , Sub
+            Case 7 : Debounce PinA.6 , 0 , Calc_key , Sub
+            Case 8 : Debounce PinA.7 , 0 , Calc_key , Sub
+         End Select
+      Next Row
+   Next Column
+   ' Query_keypad = ActKey
 
-   I = 1                                                    ' Indexbyte, hier schieben wir eine 1 drurch
-   Inmaxkey = 0
-
-   For L = 0 To 7
-       Porta = Not I
-     ' K liest die C-Ports aus
-      K = Pinc
-      ' Einer koennte eine 0 haben, invertieren, damit es eine 1 wird
-      K = Not K
-      ' Wir brauchen die stellen 2-6
-      K = K And &B01111100
-
-      If K > 0 Then                                         ' Wenn ein Knopf gedrueckt wurde
-          For L3 = 0 To 4
-             K3 = K And &B00000100
-             If K3 <> 0 Then
-               L = L * 5                                    ' Wenn wir eine Taste haben, brauchen wir auch nicht weitermachen
-               Inmaxkey = L + L3
-               ' Die Keycodes laufen jetzt von 0-39, um die 0 als NOKEY zu erkennen, machen wir +1
-               Incr Inmaxkey
-             End If
-             Shift K , Right
-          Next L3
-     End If
-     Shift I , Left
-   Next L
-
-   ' Die Taste sollte natuerlich entprellt werden
-   If Inmaxkey = Lstkey Then
-      Inmaxkey = 0
+   ' The key is indeed debounced,
+   ' But Calculator feeling is you have to release the key before it is reused
+   If Actkey = Lstkey Then
+      Actkey = 0
    Else
-      Lstkey = Inmaxkey
+      Lstkey = Actkey
    End If
 
-End Function Inmaxkey
+   Query_keypad = Actkey
+
+End Function Query_Keypad()
+
+Calc_key:
+   Select Case Row
+      Case 1 : Actkey = Column
+      Case 2 : Actkey = Column + 5
+      Case 3 : Actkey = Column + 10
+      Case 4 : Actkey = Column + 15
+      Case 5 : Actkey = Column + 20
+      Case 6 : Actkey = Column + 25
+      Case 7 : Actkey = Column + 30
+      Case 8 : Actkey = Column + 35
+   End Select
+Return
+
+
 
 
 ' ========================================================================
