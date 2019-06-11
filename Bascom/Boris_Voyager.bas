@@ -65,7 +65,7 @@ Const Hp29c_comp = 1
 ' Const Hp29c_comp = 0 ' Rt wird mit "0" initialisiert
 
 ' Compile-Switch ob das Display mit 3.3V (0) oder 5V (1) betrieben wird
-Const Dog_5v_comp = 1
+Const Dog_5v_comp = 0
 
 
 ' Mit dem folgenden Compile-Switch werden die Blockladefunktionen / Remotestart enabled.
