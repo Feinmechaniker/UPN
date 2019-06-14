@@ -37,6 +37,7 @@
 ' 07.06.19  V. 04.00 Startversion, basierend auf der BORIS Version 3.11
 ' 09.06.19  V  04.01 Portkorrekturen entsprechend Schaltung, Timing fuer Polling
 ' 09.06.19  V  04.02 Neue Query_keypad-Funktion
+' 14.06.19  V  04.03 Bugfix Hexeingabe "C"
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -58,7 +59,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.02"                                   '
+Const K_version = "04.03"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -340,6 +341,8 @@ Const K_stominus = 19                                       ' STO -
 Const K_stomal = 20                                         ' STO *
 Const K_stodurch = 21                                       ' STO /
 
+Const K_index = 22                                          ' 22  - Index - Kein wirkliches Kommando
+                                                                                                                      
 ' Winkelfunktionen ! ACHTUNG geaenderter Code
 Const K_sinus = 28                                          ' 28  - SINUS
 Const K_cosinus = 29                                        ' 29  - COSINUS
@@ -391,8 +394,6 @@ Const K_abs = 51 + K_f_offset                               ' 115  - ABS   "3"
 Const K_asin = K_sinus + K_f_offset                         ' 92  - ARCUS SINUS
 Const K_acos = K_cosinus + K_f_offset                       ' 93  - ARCUS COSINUS
 Const K_atan = K_tangens + K_f_offset                       ' 94  - ARCUS TANGENS
-
-Const K_index = 60                                          ' 60  - Index
 
 Const K_zweit = 128                                         '
 
