@@ -38,6 +38,7 @@
 ' 09.06.19  V  04.01 Portkorrekturen entsprechend Schaltung, Timing fuer Polling
 ' 09.06.19  V  04.02 Neue Query_keypad-Funktion
 ' 14.06.19  V  04.03 Bugfix Hexeingabe "C"
+' 01.07.19  V  04.04 AVR-DOS zum SD-Karten-Zugriff
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -59,14 +60,14 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.03"                                   '
+Const K_version = "04.04"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
 ' Const Hp29c_comp = 0 ' Rt wird mit "0" initialisiert
 
 ' Compile-Switch ob das Display mit 3.3V (0) oder 5V (1) betrieben wird
-Const Dog_5v_comp = 0
+Const Dog_5v_comp = 1
 
 
 ' Mit dem folgenden Compile-Switch werden die Blockladefunktionen / Remotestart enabled.
@@ -122,11 +123,11 @@ Config Debounce = 10                                        ' when the config st
 ' -----------------------------------------------------------------------------
 
 ' Keypad Column PC2 - PC6
-DDRC = &B01111100                                           ' PC2-PC6 as Output
+Ddrc = &B01111100                                           ' PC2-PC6 as Output
 
 ' Keypad Row PA0 - PA7
-DDRA = &B0000000                                            ' all Pins as Input
-PORTA = &B111111111                                         ' all Pins pull-up
+Ddra = &B0000000                                            ' all Pins as Input
+Porta = &B111111111                                         ' all Pins pull-up
 
 
 Ddrb.2 = 1                                                  ' PortB.2 steuert die Display-Beleuchtung
@@ -172,6 +173,7 @@ Declare Sub Restore_w_st()                                  ' Anzeigeregister W_
 Declare Sub Clear_t_st()                                    ' Statuszeile loeschen
 Declare Sub Clear_output()                                  ' Ausgaberegister leeren
 Declare Sub Display_error(byval Ec As Byte)                 ' Die Error-Zeichenkette ausgeben
+Declare Sub Dos_error(byval Ec As Byte , Byval Dc As Byte)  ' Die Dos-Error-Zeichenkette ausgeben
 Declare Sub Show_f_key()                                    ' Anzeige: Der F-Key ist aktiv
 Declare Sub Display_adress_input()
 Declare Sub Display_code()                                  ' Anzeige des Programmspeichers
@@ -188,6 +190,7 @@ Declare Function To_digit(byval Input As Byte) As Byte      ' Umwandeln Einstell
 Declare Sub Disp_e_float(byval Dbl_in As Double , Byval Reg As Double)       ' Grosse Float-Anzeige mit "E"
 
 Declare Function Encode_kdo(byval Inputkey As Byte) As String
+Declare Function Decode_kdo(byval Kmd_string As String) As Byte
 
 ' Eingabefunktionen
 Declare Sub Translate_x()                                   ' uebersetzen wir das Eingaberegister nach x
@@ -221,8 +224,15 @@ Declare Sub Download_headerblock(byval Size As Byte)
 Declare Sub Run_program()
 #endif
 
-Const K_num_mem = 32                                        ' Anzahl der Zahlenspeicher
-Const K_num_prg = 255                                       ' Anzahl der Zahlenspeicher
+' AVR-DOS Funktionen
+Declare Sub Init_sdcard()
+Declare Sub Init_sd_fs()
+
+Declare Sub Write_prg_file(byval Prg_filename As String)
+Declare Sub Read_prg_file(byval Prg_filename As String)
+
+Const K_num_mem = 64                                        ' Anzahl der Zahlenspeicher
+Const K_num_prg = 255                                       ' Anzahl der Programmspeicher
 
 
 ' ========================================================================
@@ -253,8 +263,8 @@ Dim I_pt As Byte                                            ' Eingabe-Pointer
 Dim Pressedkey As Byte
 Dim Lstkey As Byte
 Dim Actkey As Byte
-Dim Column as Byte                                          ' Column Counter
-Dim Row as Byte                                             ' Row Counter
+Dim Column As Byte                                          ' Column Counter
+Dim Row As Byte                                             ' Row Counter
 Dim Ziffer_in As Byte
 Dim Index As Byte
 Dim Adr_input_flag As Byte                                  ' Ein Flag, ob und wieviele Adressen erforderlich sind
@@ -272,6 +282,10 @@ Dim Index_key As Bit                                        ' Index-Key zum indi
 Dim Rnd_setup As Bit                                        ' Flag, der Zufallszahlengenerator ist initialisiert
 Dim ___rseed As Word                                        ' Der Startwert des Zufallszahlengenerators
 Dim Intrnd As Word                                          ' Int Ergebnis des Zufallszahlengenerators
+
+' SD-Interface
+Dim Btemp1 As Byte
+Dim Sd_card_ok As Bit
 
 ' 5. Permanentspeicher
 Dim Ee_fixflag As Eram Byte                                 ' Wir haben jetzt auch einen Festkomma-Modus mit 2 Nachkommastellen
@@ -341,8 +355,13 @@ Const K_stominus = 19                                       ' STO -
 Const K_stomal = 20                                         ' STO *
 Const K_stodurch = 21                                       ' STO /
 
-Const K_index = 22                                          ' 22  - Index - Kein wirkliches Kommando
-                                                                                                                      
+Const K_index = 22                                          ' 22  - Index - nicht wirklich ein Key
+Const K_end = 23                                            ' 23 - Programmende (Marke)
+Const K_sd_write = 24                                       ' 24 - Save 2 disk
+Const K_sd_read = 25                                        ' 25 - read from disk
+Const K_sdd_write = 26                                      ' 24 - Save Data 2 disk
+Const K_sdd_read = 27                                       ' 25 - read Data from disk
+
 ' Winkelfunktionen ! ACHTUNG geaenderter Code
 Const K_sinus = 28                                          ' 28  - SINUS
 Const K_cosinus = 29                                        ' 29  - COSINUS
@@ -408,6 +427,18 @@ Const D_char_pfl = &H7F                                     ' Pfeil links
 #endif
 
 Const Pi_k = 3.141592653589793238462643383279502
+
+'###############################################################################
+
+$include "Config_MMCSD_HC.bas"
+
+
+'###############################################################################
+
+$include "Config_AVR-DOS.BAS"
+
+'###############################################################################
+
 
 ' ========================================================================
 ' Hauptprogramm
@@ -539,7 +570,7 @@ Sub Polling()
 
   Pc = P_pc + 1
 
-  Tmatrix = Query_Keypad()                                      ' Abfrage der Tastaturmatrix, Return Tastenposition
+  Tmatrix = Query_keypad()                                  ' Abfrage der Tastaturmatrix, Return Tastenposition
 
   Pressedkey = Key2kdo(tmatrix)                             ' Umwandeln in einen Tastaturcode
 
@@ -921,6 +952,12 @@ Function Needs_adress(inputkey As Byte) As Byte
       Case K_grd
         Needs_adress = 1
 
+      ' SD Filebefehle
+      Case K_sd_write                                       ' Save 2 disk
+        Needs_adress = 1
+      Case K_sd_read                                        ' read from disk
+        Needs_adress = 1
+
       End Select
 End Function Needs_adress
 
@@ -1190,6 +1227,36 @@ Sub Display_error(byval Ec As Byte)
    Call Anzeigen
 
 End Sub Display_error
+
+' ========================================================================
+' Den String "DOS-Error" in die Statuszeile der Anzeige schreiben
+' Ec = Errorcode zum Anzeigen
+' Dc = Erweiterter Errorcode zum Anzeigen
+' ========================================================================
+Sub Dos_error(byval Ec As Byte , Byval Dc As Byte)
+
+   Local N As Byte
+
+   Call Clear_t_st()
+
+   T_st(14) = "D"
+   T_st(13) = "O"
+   T_st(12) = "S"
+   T_st(11) = "-"
+   T_st(10) = "E"
+   T_st(9) = "r"
+   T_st(8) = "r"
+   T_st(7) = "o"
+   T_st(6) = "r"
+   T_st(5) = D_space                                        ' ASCII Leerzeichen
+   T_st(4) = Ec
+
+   T_st(2) = Dc
+
+   P_goflag = 0                                             ' Fehler fuehren immer zum Programmhalt
+   Call Anzeigen
+
+End Sub Dos_error
 
 
 ' ========================================================================
@@ -2331,6 +2398,12 @@ Function Exec_kdo() As Byte
            Call Beepme
       Case K_pause                                          ' 1 Sekunde warten, anzeige an
            Call Pause1s
+
+      ' SD Filebefehle
+      Case K_sd_write                                       ' Save 2 disk
+           Call Write_prg_file( "PROG_3.b5m")
+      Case K_sd_read                                        ' read from disk
+           Call Read_prg_file( "PROG_4.b5m")
       End Select
 
 
@@ -2456,7 +2529,7 @@ Function Key2kdo(incode As Byte) As Byte
 
 
    ' im HEX-Darstellungsmodus bekommen die Sinus-tan und ln-sqrt eine andere Funktion,
-   ' nÃ¤mlich der Zifferneingabe fÃ¼r A-F
+   ' naemlich der Zifferneingabe fuer A-F
 
    If Ee_fixflag = S_disp_hex Then                          ' Wenn wir im Hex-modus sind, nur Integer
      Select Case Incode
@@ -2474,6 +2547,16 @@ Function Key2kdo(incode As Byte) As Byte
           Key2kdo = K_hex_d                                 ' "D"
      End Select
    End If
+
+   ' Die File-Befehle brauchen noch einen Platz auf dem Keyboard
+   ' Testweise auf den Sin / Cos Tasten ist jetzt SFILE / LFILE
+   Select Case Incode
+      Case 30
+          Key2kdo = K_sd_write                              ' Save 2 disk
+      Case 26
+          Key2kdo = K_sd_read                               ' read from disk
+   End Select
+
 End Function Key2kdo
 
 
@@ -2548,6 +2631,12 @@ Function Encode_kdo(byval Inputkey As Byte) As String
           Encode_kdo = "STO*"
      Case K_stodurch
           Encode_kdo = "STO/"
+     Case K_end
+          Encode_kdo = "END"
+     Case K_sd_write                                        ' Save 2 disk
+          Encode_kdo = "SFILE"
+     Case K_sd_read                                         ' read from disk
+          Encode_kdo = "LFILE"
      Case K_pause
           Encode_kdo = "PAUSE"
      Case K_minusx
@@ -2626,30 +2715,287 @@ Function Encode_kdo(byval Inputkey As Byte) As String
 
 End Function Encode_kdo
 
+' ========================================================================
+' SD-Card-Routinen fuerr SDHC-Card
+' ========================================================================
+
+Sub Init_sdcard
+   Call Init_sd_fs
+   If Btemp1 <> 0 Or Gbdriveerror <> 0 Then
+      Call Dos_error( "C" , "X")                            ' Print #1 , "Fehler oder keine Karte - !!! Neustart !!!"
+      Wait 4
+      ' Reboot, nichht wirklich dass, was wir hier wollen
+      Goto 0
+   End If
+End Sub
+
+Sub Init_sd_fs
+   Set Mmc_cs
+   Reset Mmc_cs
+   ' Print #1 , "--- SD-Karte einbinden ---> ";
+   If Gbdriveerror = 0 Then                                 '
+      ' Print #1 , "Status Karte OK"
+      Btemp1 = Initfilesystem(1)
+      ' Print #1 , "--- DOS-Filesystem einbinden ---> ";
+      If Btemp1 = 0 Then
+         Sd_card_ok = 1
+         ' Print #1 , "Status FS OK"
+      Else
+         Call Dos_error( "C" , "U")                         ' "Fehler (" ; Btemp1 ; ") "
+      End If
+   Else
+      ' Print #1 , "Fehler: " ;
+      Select Case Gbdriveerror
+         Case &HE0 : Call Dos_error( "C" , "0")             '  "Error drive not present"
+         Case &HE1 : Call Dos_error( "C" , "1")             '  "Error drive not supported"
+         Case &HE2 : Call Dos_error( "C" , "2")             '  "Error drive not initialized"
+         Case &HE6 : Call Dos_error( "C" , "6")             '  "Error drive cmd not accepted"
+         Case &HE7 : Call Dos_error( "C" , "7")             '  "Error drive no data"
+         Case &HE9 : Call Dos_error( "C" , "9")             '  "Error drive init1"
+         Case &HEA : Call Dos_error( "C" , "A")             '  "Error drive init2"
+         Case &HEB : Call Dos_error( "C" , "B")             '  "Error drive init3"
+         Case &HEC : Call Dos_error( "C" , "C")             '  "Error drive init4"
+         Case &HED : Call Dos_error( "C" , "D")             '  "Error drive init5"
+         Case &HEE : Call Dos_error( "C" , "E")             '  "Error drive init6"
+
+         Case &HF1 : Call Dos_error( "C" , "G")             '  "Error drive read1"
+         Case &HF2 : Call Dos_error( "C" , "H")             '  "Error drive read2"
+
+         Case &HF5 : Call Dos_error( "C" , "K")             '  "Error drive write1"
+         Case &HF6 : Call Dos_error( "C" , "L")             '  "Error drive write2"
+         Case &HF7 : Call Dos_error( "C" , "M")             '  "Error drive write3"
+         Case &HF8 : Call Dos_error( "C" , "N")             '  "Error drive write4"
+      End Select
+   End If
+End Sub
+
+
+
+' ========================================================================
+' Schreiben einer Programmdatei
+' Wir beginnen bei P_PC und schreiben Zeilenweise so lange,
+' Bis der END-Befehl gefunden wird, oder wir am Ende des Programmspeichers sind
+' ========================================================================
+
+Sub Write_prg_file(byval Prg_filename As String)
+
+  Local Indx As Word
+  Local Zch As Byte
+  Local Bzch As Byte
+  ' Local Programsize As Byte
+  ' Local Bi As Byte
+  ' Local Bj As Byte
+
+  ' Local Dispadr As Byte
+  Local Nc As Byte
+  Local Sc As Byte
+  Local S_p_pc As Byte
+  Local Code_word As Word
+
+  Local Code_line As String * 17                            ' 16 + \0
+
+  Call Init_sdcard()                                        ' Bei jedem Aufruf neu mounten und initialisieren
+
+  Open Prg_filename For Output As #20
+
+  ' P_pc ist der Logische Befehlszaehler , Von 0-254
+  ' K_num_prg ist die Anzahl der Programmspeicher also 255
+
+  S_p_pc = P_pc
+
+  ' Print #1 , "Write_prg_file " ; Prg_filename
+
+  For Indx = P_pc To K_num_prg
+
+     Incr P_pc                                              ' Logisch / physisch
+
+     Code_word = Ee_program(p_pc)
+     Call Display_code_line(code_word)
+     Call Anzeigen()
+
+     For Sc = 1 To 16
+       Nc = 17 - Sc
+       Zch = W_st(nc)
+       Insertchar Code_line , Sc , Zch
+     Next Sc
+
+     Insertchar Code_line , 17 , 0
+
+     Print #20 , Code_line
+
+     Zch = High(code_word)                                  ' High-Teil - War das END?
+
+     If Zch = K_end Then Goto Close_out_file
+
+  Next Indx
+
+Close_out_file:
+  Close #20
+
+  ' Print #1 , "Closed " ; Prg_filename
+
+  P_pc = S_p_pc
+
+End Sub Write_prg_file
+
+
+
+' ========================================================================
+' Lesen einer Datei und Abspeichern im Programmspeicher
+' ========================================================================
+Sub Read_prg_file(byval Prg_filename As String)
+
+  Local Indx As Word
+  Local Wzch As Word
+
+  Local Code_line As String * 65                            ' 64 + \0
+  Local Code_adress As String * 4
+  Local Code_code As String * 8
+  Local Code_opadr As String * 4
+  Local Code_idx As String * 3
+  Local Code_idxs As String * 3
+  Local Code_idxc As Word
+
+  Local C_pc As Byte
+  Local C_code As Byte
+  Local C_opadr As Byte
+
+  ' Local Programsize As Byte
+  ' Local Bi As Byte
+  ' Local Bj As Byte
+
+  ' Local Dispadr As Byte
+  Local Nc As Byte
+  Local Sc As Byte
+  Local S_p_pc As Byte
+  Local Code_word As Word
+
+  Code_idxs = "Ix"
+
+  Call Init_sdcard()                                        ' Bei jedem Aufruf neu mounten und initialisieren
+
+  Open Prg_filename For Input As #20
+
+  ' P_pc ist der Logische Befehlszaehler , Von 0-254
+  ' K_num_prg ist die Anzahl der Programmspeicher also 255
+
+  S_p_pc = P_pc
+
+  ' Print #1 , "Read_prg_file " ; Prg_filename
+
+  For Indx = P_pc To K_num_prg
+
+     Incr P_pc                                              ' Logisch / physisch
+
+     Input #20 , Code_line
+     If Eof(#20) <> 0 Then Goto Close_in_file
+
+     ' Print #1 , "Codeline = " ; Code_line
+
+     Code_adress = Mid(code_line , 1 , 3)
+     C_pc = Val(code_adress)
+     Incr C_pc                                              ' physische Speicheradresse
+
+     Code_code = Mid(code_line , 5 , 7)
+     C_code = Decode_kdo(code_code)
+
+     Code_idx = Mid(code_line , 13 , 2)
+     Code_idxc = Compare(code_idx , Code_idxs , 2)
+     If Code_idxc = 0 Then
+        C_code = C_code + 128                               ' Index bedeutet 128 drauf
+        Code_opadr = Mid(code_line , 15 , 2)
+     Else
+        Code_opadr = Mid(code_line , 14 , 3)
+     End If
+
+     C_opadr = Val(code_opadr)                              ' Logische Speicheradresse
+
+     Wzch = C_code * 256
+     Wzch = Wzch + C_opadr
+     Ee_program(c_pc) = Wzch                                ' von Buffer nach EEPROM umkopieren
+     ' Print #1 , "C_pc = " ; C_pc ; " Code_code = " ; Code_code ; " Code_opadr = " ; C_opadr
+     ' Print #1 , "Cod = " ; Wzch ; " C_code = " ; C_code
+
+  Next Indx
+
+Close_in_file:
+  Close #20
+
+  ' Print #1 , "Closed " ; Prg_filename
+
+  P_pc = S_p_pc
+
+End Sub Read_prg_file
+
+
+' ========================================================================
+' Umwandeln einer Zeichenkette in den Binaercode des Kommandos
+' ========================================================================
+Function Decode_kdo(byval Kmd_string As String) As Byte
+
+' Print #1 , " ---> Decode_kdo " ; Kmd_string ;
+
+Local Fkt_index As Byte
+Local Cmp_reslt As Word
+Local Cmp_string As String * 8
+Local Tmp_fcode As String * 8
+Local Len1 As Byte
+Local Len2 As Byte
+
+Decode_kdo = 0
+
+Cmp_string = Ucase(kmd_string)
+Cmp_string = Trim(cmp_string)
+
+Len1 = Len(cmp_string)
+
+For Fkt_index = 0 To 127
+   Tmp_fcode = Encode_kdo(fkt_index)
+   Tmp_fcode = Trim(tmp_fcode)
+   Tmp_fcode = Ucase(tmp_fcode)
+   Len2 = Len(tmp_fcode)
+
+   If Len1 = Len2 Then
+      ' Zeichenkettenvergleich
+      Cmp_reslt = Compare(cmp_string , Tmp_fcode , Len1)
+      ' Print #1 , " =++++++=> " ; Fkt_index ; " " ; Tmp_fcode ; " " ; Cmp_string ; " " ; Cmp_reslt
+      If Cmp_reslt = 0 Then
+         Decode_kdo = Fkt_index
+         ' Print #1 , " Matched strings >" ; Cmp_string ; "< >" ; Tmp_fcode ; "< "
+      End If
+   End If
+
+Next Fkt_index
+
+' Print #1 , " => " ; Decode_kdo
+
+End Function
+
+
 
 ' ========================================================================
 ' Keyboard polling and debouncing
 ' Function and subroutine
 ' -----------------------------------------------------------------------------
-Function Query_Keypad() as Byte                             ' needs about 225us
+Function Query_keypad() As Byte                             ' needs about 225us
    Actkey = 0                                               ' clear Keycode
    For Column = 1 To 5                                      ' all Columns
-      PORTC = &B01111100                                    ' Column Bitmask (PC2-PC6 High)
-      If Column = 1 Then Reset PortC.2
-      If Column = 2 Then Reset PortC.3
-      If Column = 3 Then Reset PortC.4
-      If Column = 4 Then Reset PortC.5
-      If Column = 5 Then Reset PortC.6
+      Portc = &B01111100                                    ' Column Bitmask (PC2-PC6 High)
+      If Column = 1 Then Reset Portc.2
+      If Column = 2 Then Reset Portc.3
+      If Column = 3 Then Reset Portc.4
+      If Column = 4 Then Reset Portc.5
+      If Column = 5 Then Reset Portc.6
       For Row = 1 To 8                                      ' all Rows
          Select Case Row
-            Case 1 : Debounce PinA.0 , 0 , Calc_key , Sub
-            Case 2 : Debounce PinA.1 , 0 , Calc_key , Sub
-            Case 3 : Debounce PinA.2 , 0 , Calc_key , Sub
-            Case 4 : Debounce PinA.3 , 0 , Calc_key , Sub
-            Case 5 : Debounce PinA.4 , 0 , Calc_key , Sub
-            Case 6 : Debounce PinA.5 , 0 , Calc_key , Sub
-            Case 7 : Debounce PinA.6 , 0 , Calc_key , Sub
-            Case 8 : Debounce PinA.7 , 0 , Calc_key , Sub
+            Case 1 : Debounce Pina.0 , 0 , Calc_key , Sub
+            Case 2 : Debounce Pina.1 , 0 , Calc_key , Sub
+            Case 3 : Debounce Pina.2 , 0 , Calc_key , Sub
+            Case 4 : Debounce Pina.3 , 0 , Calc_key , Sub
+            Case 5 : Debounce Pina.4 , 0 , Calc_key , Sub
+            Case 6 : Debounce Pina.5 , 0 , Calc_key , Sub
+            Case 7 : Debounce Pina.6 , 0 , Calc_key , Sub
+            Case 8 : Debounce Pina.7 , 0 , Calc_key , Sub
          End Select
       Next Row
    Next Column
@@ -2665,7 +3011,7 @@ Function Query_Keypad() as Byte                             ' needs about 225us
 
    Query_keypad = Actkey
 
-End Function Query_Keypad()
+End Function Query_keypad()
 
 Calc_key:
    Select Case Row
