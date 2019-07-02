@@ -39,6 +39,7 @@
 ' 09.06.19  V  04.02 Neue Query_keypad-Funktion
 ' 14.06.19  V  04.03 Bugfix Hexeingabe "C"
 ' 01.07.19  V  04.04 AVR-DOS zum SD-Karten-Zugriff
+' 02.07.19  V  04.05 Bugfix SD-CARD-Leseroutine, Filenamenhandling, Anzeigemodus bei Kartenaktionen
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -60,7 +61,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.04"                                   '
+Const K_version = "04.05"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -172,6 +173,7 @@ Declare Sub Save_w_st()                                     ' Anzeigeregister W_
 Declare Sub Restore_w_st()                                  ' Anzeigeregister W_st zurueckladen
 Declare Sub Clear_t_st()                                    ' Statuszeile loeschen
 Declare Sub Clear_output()                                  ' Ausgaberegister leeren
+Declare Sub Roll_anzeige()                                  ' Die drei Ausgabezeilen rollen
 Declare Sub Display_error(byval Ec As Byte)                 ' Die Error-Zeichenkette ausgeben
 Declare Sub Dos_error(byval Ec As Byte , Byval Dc As Byte)  ' Die Dos-Error-Zeichenkette ausgeben
 Declare Sub Show_f_key()                                    ' Anzeige: Der F-Key ist aktiv
@@ -253,8 +255,8 @@ Dim Lstx As Double
 ' 3. Speicher fuer die Anzeige
 Dim I_st(16) As Byte                                        ' Eingabe-Register
 Dim T_st(16) As Byte                                        ' Das Anzeige-Register fuer die erste Zeile
-Dim V_st(16) As Byte                                        ' Das Anzeige-Register fuer die erste Zeile
-Dim W_st(16) As Byte                                        ' Das Anzeige-Register fuer die zweite Zeile
+Dim V_st(16) As Byte                                        ' Das Anzeige-Register fuer die zweite Zeile
+Dim W_st(16) As Byte                                        ' Das Anzeige-Register fuer die dritte Zeile
 
 Dim S_st(48) As Byte                                        ' Eine Kopie des Anzeige-Registers
 Dim I_pt As Byte                                            ' Eingabe-Pointer
@@ -526,13 +528,16 @@ Config Timer0 = Timer , Prescale = 1024                     'Timer-Takt ist Quar
 ' Vorteiler 1024 ergibt 10800 Interrupts pro Sekunde
 ' der volle Durchlauf von 255 Schritten ergibt dann etwa 42 Pollings pro Sekunde, das ist OK
 
-Timer0 = 1
+' Timer0 = 1                                             'Voller Zyklus
+Timer0 = 68
 
 Enable Timer0
 Enable Interrupts
 
-
 ' Hier geht der Ernst des Lebens jetzt los
+Call Interpr_xy()
+Call Anzeigen
+
 Do                                                          'Hauptschleife
       Waitms 1000
 
@@ -827,8 +832,10 @@ Sub Polling()
   If P_goflag = 1 Then
      Timer0 = 253                                           '256-3
   Else
-     Timer0 = 1                                             'Voller Zyklus
+'     Timer0 = 1                                             'Voller Zyklus
+      Timer0 = 68
   End If
+
 End Sub Polling
 
 
@@ -1911,6 +1918,18 @@ Sub Restore_w_st()
    Next N
 End Sub Restore_w_st
 
+' ========================================================================
+' Die 3 Anzeigezeilen rollen (Anzeige bei lesen / schreiben Programm)
+' ========================================================================
+Sub Roll_anzeige()
+   Local N As Byte
+
+   For N = 1 To 16
+      T_st(n) = V_st(n)
+      V_st(n) = W_st(n)
+   Next N
+End Sub Roll_anzeige
+
 
 ' ========================================================================
 ' Statuszeile t_st bereinigen
@@ -2097,6 +2116,13 @@ Function Exec_kdo() As Byte
     Local Pc As Byte                                        ' Index zum Zugriff auf den Programmspeicher, P_PC zaehlt ab 0, PC ab 1
     Local Memcont As Double
     Local Aerr_flg As Byte
+
+    Local Fileno As Byte
+    Local Filename As String * 12
+
+    Filename = "PROG_%.b5m"
+    Fileno = X_adresse + "0"
+    Replacechars Filename , "%" , Fileno
 
     Exec_kdo = 0                                            ' Default: OK
 
@@ -2400,10 +2426,10 @@ Function Exec_kdo() As Byte
            Call Pause1s
 
       ' SD Filebefehle
-      Case K_sd_write                                       ' Save 2 disk
-           Call Write_prg_file( "PROG_3.b5m")
+      Case K_sd_write                                       ' write to disk
+           Call Write_prg_file(filename)
       Case K_sd_read                                        ' read from disk
-           Call Read_prg_file( "PROG_4.b5m")
+           Call Read_prg_file(filename)
       End Select
 
 
@@ -2412,7 +2438,7 @@ No_execution:
     X_adresse = &HFF
 
 Finish_kdo:
-    ' Das Kommando koennte den Inhalt von "Rx" geÃ¤ndert haben, wir uebertragen den Inhalt in die Anzeige
+    ' Das Kommando koennte den Inhalt von "Rx" geaendert haben, wir uebertragen den Inhalt in die Anzeige
     Call Interpr_xy()
 
     Z_inputflag = 0                                         ' Kommando abgeschlossen, jetzt koennen wieder Ziffern kommen
@@ -2810,6 +2836,7 @@ Sub Write_prg_file(byval Prg_filename As String)
      Incr P_pc                                              ' Logisch / physisch
 
      Code_word = Ee_program(p_pc)
+     Call Roll_anzeige()
      Call Display_code_line(code_word)
      Call Anzeigen()
 
@@ -2822,6 +2849,8 @@ Sub Write_prg_file(byval Prg_filename As String)
      Insertchar Code_line , 17 , 0
 
      Print #20 , Code_line
+
+     Waitms 200
 
      Zch = High(code_word)                                  ' High-Teil - War das END?
 
@@ -2856,19 +2885,16 @@ Sub Read_prg_file(byval Prg_filename As String)
   Local Code_idxs As String * 3
   Local Code_idxc As Word
 
-  Local C_pc As Byte
   Local C_code As Byte
   Local C_opadr As Byte
 
-  ' Local Programsize As Byte
-  ' Local Bi As Byte
-  ' Local Bj As Byte
-
-  ' Local Dispadr As Byte
-  Local Nc As Byte
-  Local Sc As Byte
+  ' Local Nc As Byte
+  ' Local Sc As Byte
   Local S_p_pc As Byte
   Local Code_word As Word
+
+  Local Qpos As Byte
+  Local Wpos As Byte
 
   Code_idxs = "Ix"
 
@@ -2881,20 +2907,28 @@ Sub Read_prg_file(byval Prg_filename As String)
 
   S_p_pc = P_pc
 
-  ' Print #1 , "Read_prg_file " ; Prg_filename
-
-  For Indx = P_pc To K_num_prg
-
-     Incr P_pc                                              ' Logisch / physisch
+  While P_pc < K_num_prg                                    ' Print #1 , "Read_prg_file " ; Prg_filename
 
      Input #20 , Code_line
      If Eof(#20) <> 0 Then Goto Close_in_file
 
-     ' Print #1 , "Codeline = " ; Code_line
+     Call Roll_anzeige()
 
-     Code_adress = Mid(code_line , 1 , 3)
-     C_pc = Val(code_adress)
-     Incr C_pc                                              ' physische Speicheradresse
+     For Qpos = 1 To 16
+         Wpos = 17 - qpos
+         Wrkchar = Mid(code_line , Qpos , 1)
+         W_st(wpos) = Wrkchar
+     Next Qpos
+
+     Code_adress = Mid(code_line , 2 , 3)
+     P_pc = Val(code_adress)
+
+     If P_pc > K_num_prg Then
+        Call Dos_error( "A" , "X")
+        Goto Close_in_file
+     End If
+
+     Incr P_pc                                              ' physische Speicheradresse
 
      Code_code = Mid(code_line , 5 , 7)
      C_code = Decode_kdo(code_code)
@@ -2912,11 +2946,15 @@ Sub Read_prg_file(byval Prg_filename As String)
 
      Wzch = C_code * 256
      Wzch = Wzch + C_opadr
-     Ee_program(c_pc) = Wzch                                ' von Buffer nach EEPROM umkopieren
-     ' Print #1 , "C_pc = " ; C_pc ; " Code_code = " ; Code_code ; " Code_opadr = " ; C_opadr
-     ' Print #1 , "Cod = " ; Wzch ; " C_code = " ; C_code
+     Ee_program(p_pc) = Wzch                                ' von Buffer nach EEPROM umkopieren
 
-  Next Indx
+     Call Anzeigen()
+
+     Waitms 200
+
+     If C_code = K_end Then Goto Close_in_file
+
+  Wend
 
 Close_in_file:
   Close #20
