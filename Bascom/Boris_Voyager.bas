@@ -40,15 +40,22 @@
 ' 14.06.19  V  04.03 Bugfix Hexeingabe "C"
 ' 01.07.19  V  04.04 AVR-DOS zum SD-Karten-Zugriff
 ' 02.07.19  V  04.05 Bugfix SD-CARD-Leseroutine, Filenamenhandling, Anzeigemodus bei Kartenaktionen
+' 06.07.19  V  04.06 SD Initialisierung ohne Reboot, Bessere Fehlermeldungen
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
 
-$prog &HFF , &H62 , &HD9 , &HFF                             ' generated. Take care that the chip supports all fuse bytes.
+' Lock, low, High,  Extend
+' $prog &HFF , &H62 , &HD9 , &HFF                             ' generated. Take care that the chip supports all fuse bytes.
+$prog &HFF , &HE2 , &HD9 , &HFF                             ' generated. Take care that the chip supports all fuse bytes.
 
-$crystal = 11059700                                         ' Quarzfrequenz 11.0597 MHz
+' $crystal = 11059700                                         ' Quarzfrequenz 11.0597 MHz
+$crystal = 8000000                                          ' Kein Quarz: 8MHz
 
-$baud = 115200                                              ' Baudrate der UART: 115200 Baud
+' $baud = 115200                                              ' Baudrate der UART: 115200 Baud
+$baud = 9600                                                ' Baudrate der UART: 9600 Baud
+
+Osccal = 74                                                 ' Kalibrierter interner Qsci
 
 ' Echo Off
 
@@ -61,7 +68,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.05"                                   '
+Const K_version = "04.06"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -175,7 +182,7 @@ Declare Sub Clear_t_st()                                    ' Statuszeile loesch
 Declare Sub Clear_output()                                  ' Ausgaberegister leeren
 Declare Sub Roll_anzeige()                                  ' Die drei Ausgabezeilen rollen
 Declare Sub Display_error(byval Ec As Byte)                 ' Die Error-Zeichenkette ausgeben
-Declare Sub Dos_error(byval Ec As Byte , Byval Dc As Byte)  ' Die Dos-Error-Zeichenkette ausgeben
+Declare Sub Dos_error(byval Error_string As String)         ' Die Dos-Error-Zeichenkette ausgeben
 Declare Sub Show_f_key()                                    ' Anzeige: Der F-Key ist aktiv
 Declare Sub Display_adress_input()
 Declare Sub Display_code()                                  ' Anzeige des Programmspeichers
@@ -1240,9 +1247,12 @@ End Sub Display_error
 ' Ec = Errorcode zum Anzeigen
 ' Dc = Erweiterter Errorcode zum Anzeigen
 ' ========================================================================
-Sub Dos_error(byval Ec As Byte , Byval Dc As Byte)
+Sub Dos_error(byval Error_string As String)
 
    Local N As Byte
+   Local Strlen As Byte
+   Local Zpos As Byte
+   Local Wchar As String * 1
 
    Call Clear_t_st()
 
@@ -1255,10 +1265,21 @@ Sub Dos_error(byval Ec As Byte , Byval Dc As Byte)
    T_st(8) = "r"
    T_st(7) = "o"
    T_st(6) = "r"
-   T_st(5) = D_space                                        ' ASCII Leerzeichen
-   T_st(4) = Ec
 
-   T_st(2) = Dc
+   Strlen = Len(error_string)
+   If Strlen > 16 Then Strlen = 16                          ' Abschneiden
+   Zpos = 16
+
+   For N = 1 To Strlen
+      Wchar = Mid(error_string , N , 1)
+      V_st(zpos) = Wchar
+      Decr Zpos
+   Next N
+
+   While Zpos > 1
+      Decr Zpos
+      V_st(zpos) = D_space
+   Wend
 
    P_goflag = 0                                             ' Fehler fuehren immer zum Programmhalt
    Call Anzeigen
@@ -2477,113 +2498,116 @@ End Sub Rolldown
 ' Die Kommandos zaehlen einfach hoch, "F" macht dann noch mal K_F_OFFSET drauf (in der Polling-Routine)
 ' ========================================================================
 Function Key2kdo(incode As Byte) As Byte
+
    Key2kdo = 0                                              ' Default, nokey
+
+' auf dem Testboard habe ich eine andere Tastaturbelegung
    Select Case Incode
-     Case 1
+     Case 36
         Key2kdo = K_enter                                   ' "Enter"
-     Case 2
+     Case 37
         Key2kdo = K_chgxy                                   ' x <-> y
-     Case 3
+     Case 38
         Key2kdo = K_recall                                  ' RCL
-     Case 4
+     Case 39
         Key2kdo = K_store                                   ' STO
 
-     Case 5
+     Case 31
         Key2kdo = K_plus                                    ' "+"
-     Case 6
+     Case 32
         Key2kdo = K_minus                                   ' "-"
-     Case 7
+     Case 33
         Key2kdo = K_mal                                     ' "*"
-     Case 8
+     Case 34
         Key2kdo = K_durch                                   ' "/"
 
-     Case 9
+     Case 26
         Key2kdo = K_clearx                                  ' CX
-     Case 10
+     Case 27
         Key2kdo = "3"                                       ' 51
-     Case 11
+     Case 28
         Key2kdo = "6"                                       ' 54
-     Case 12
+     Case 29
         Key2kdo = "9"                                       ' 57
 
-     Case 13
+     Case 21
         Key2kdo = "0"                                       ' 48
-     Case 14
+     Case 22
         Key2kdo = "2"                                       ' 50
-     Case 15
+     Case 23
         Key2kdo = "5"                                       ' 53
-     Case 16
+     Case 24
         Key2kdo = "8"                                       ' 56
 
-     Case 17
+     Case 16
         Key2kdo = K_point                                   ' "."
-     Case 18
+     Case 17
         Key2kdo = "1"                                       ' 49
-     Case 19
+     Case 18
         Key2kdo = "4"                                       ' 52
-     Case 20
+     Case 19
         Key2kdo = "7"                                       ' 55
 
-     Case 21
+     Case 11
         Key2kdo = K_sqrt                                    ' SQRT
-     Case 22
+     Case 12
         Key2kdo = K_tangens                                 ' "Tangens"
-     Case 23
+     Case 13
         Key2kdo = P_return                                  ' RETURN
-     Case 24
+     Case 14
         Key2kdo = P_start                                   ' START / STOP
 
-     Case 25
+     Case 6
         Key2kdo = K_xhochy                                  ' x hoch y
-     Case 26
+     Case 7
         Key2kdo = K_cosinus                                 ' "Cosinus"
-     Case 27
+     Case 8
         Key2kdo = P_gosub                                   ' GOSUB
-     Case 28
+     Case 9
         Key2kdo = K_index                                   ' "Index"
 
-     Case 29
+     Case 1
         Key2kdo = K_logn                                    ' LN
-     Case 30
+     Case 2
         Key2kdo = K_sinus                                   ' "Sinus"
-     Case 31
+     Case 3
         Key2kdo = P_goto                                    ' GOTO
-     Case 32
+     Case 4
         Key2kdo = K_zweit                                   ' "F" - Zweitbelegung der Tasten
 
    End Select
 
 
    ' im HEX-Darstellungsmodus bekommen die Sinus-tan und ln-sqrt eine andere Funktion,
-   ' naemlich der Zifferneingabe fuer A-F
+   ' nÃ¤mlich der Zifferneingabe fÃ¼r A-F
 
    If Ee_fixflag = S_disp_hex Then                          ' Wenn wir im Hex-modus sind, nur Integer
      Select Case Incode
-       Case 21
+       Case 11
           Key2kdo = K_hex_c                                 ' "C"
-       Case 22
+       Case 12
           Key2kdo = K_hex_f                                 ' "F"
-       Case 25
+       Case 6
           Key2kdo = K_hex_b                                 ' "B"
-       Case 26
+       Case 7
           Key2kdo = K_hex_e                                 ' "E"
-       Case 29
+       Case 1
           Key2kdo = K_hex_a                                 ' "A"
-       Case 30
+       Case 2
           Key2kdo = K_hex_d                                 ' "D"
      End Select
    End If
 
-   ' Die File-Befehle brauchen noch einen Platz auf dem Keyboard
    ' Testweise auf den Sin / Cos Tasten ist jetzt SFILE / LFILE
    Select Case Incode
-      Case 30
+      Case 2
           Key2kdo = K_sd_write                              ' Save 2 disk
-      Case 26
+      Case 7
           Key2kdo = K_sd_read                               ' read from disk
    End Select
 
 End Function Key2kdo
+
 
 
 ' ========================================================================
@@ -2746,13 +2770,27 @@ End Function Encode_kdo
 ' ========================================================================
 
 Sub Init_sdcard
-   Call Init_sd_fs
-   If Btemp1 <> 0 Or Gbdriveerror <> 0 Then
-      Call Dos_error( "C" , "X")                            ' Print #1 , "Fehler oder keine Karte - !!! Neustart !!!"
-      Wait 4
-      ' Reboot, nichht wirklich dass, was wir hier wollen
-      Goto 0
-   End If
+   Local Tries As Byte
+   Local Derrorcode As Byte
+
+   ' 5 Versuche des Init der SD-Card
+   For Tries = 1 To 5
+      Derrorcode = Driveinit()
+      Derrorcode = Derrorcode + Drivereset()
+      If Derrorcode = 0 Then
+         Btemp1 = 0
+         Gbdriveerror = 0
+         Call Init_sd_fs
+         If Btemp1 <> 0 Or Gbdriveerror <> 0 Then
+            Call Dos_error( "No SD Card")                   ' Fehler oder keine Karte
+            Wait 5
+         Else
+            Tries = 5
+         End If
+      Else
+            Call Dos_error( "SD Init Error")                ' Fehler oder keine Karte
+      End If
+   Next Tries
 End Sub
 
 Sub Init_sd_fs
@@ -2767,32 +2805,33 @@ Sub Init_sd_fs
          Sd_card_ok = 1
          ' Print #1 , "Status FS OK"
       Else
-         Call Dos_error( "C" , "U")                         ' "Fehler (" ; Btemp1 ; ") "
+         Call Dos_error( "SD FS Error")                     ' "Fehler (" ; Btemp1 ; ") "
       End If
    Else
-      ' Print #1 , "Fehler: " ;
       Select Case Gbdriveerror
-         Case &HE0 : Call Dos_error( "C" , "0")             '  "Error drive not present"
-         Case &HE1 : Call Dos_error( "C" , "1")             '  "Error drive not supported"
-         Case &HE2 : Call Dos_error( "C" , "2")             '  "Error drive not initialized"
-         Case &HE6 : Call Dos_error( "C" , "6")             '  "Error drive cmd not accepted"
-         Case &HE7 : Call Dos_error( "C" , "7")             '  "Error drive no data"
-         Case &HE9 : Call Dos_error( "C" , "9")             '  "Error drive init1"
-         Case &HEA : Call Dos_error( "C" , "A")             '  "Error drive init2"
-         Case &HEB : Call Dos_error( "C" , "B")             '  "Error drive init3"
-         Case &HEC : Call Dos_error( "C" , "C")             '  "Error drive init4"
-         Case &HED : Call Dos_error( "C" , "D")             '  "Error drive init5"
-         Case &HEE : Call Dos_error( "C" , "E")             '  "Error drive init6"
+         Case &HE0 : Call Dos_error( "No SD drive")
+         Case &HE1 : Call Dos_error( "Unsupported drive" )
+         Case &HE2 : Call Dos_error( "SD not initial." )
+         Case &HE6 : Call Dos_error( "illegal SD cmd" )
+         Case &HE7 : Call Dos_error( "SD drive no data" )
+         Case &HE9 : Call Dos_error( "SD drive init1" )
+         Case &HEA : Call Dos_error( "SD drive init2" )
+         Case &HEB : Call Dos_error( "SD drive init3" )
+         Case &HEC : Call Dos_error( "SD drive init4" )
+         Case &HED : Call Dos_error( "SD drive init5" )
+         Case &HEE : Call Dos_error( "SD drive init6" )
 
-         Case &HF1 : Call Dos_error( "C" , "G")             '  "Error drive read1"
-         Case &HF2 : Call Dos_error( "C" , "H")             '  "Error drive read2"
+         Case &HF1 : Call Dos_error( "SD drive read1" )
+         Case &HF2 : Call Dos_error( "SD drive read2" )
 
-         Case &HF5 : Call Dos_error( "C" , "K")             '  "Error drive write1"
-         Case &HF6 : Call Dos_error( "C" , "L")             '  "Error drive write2"
-         Case &HF7 : Call Dos_error( "C" , "M")             '  "Error drive write3"
-         Case &HF8 : Call Dos_error( "C" , "N")             '  "Error drive write4"
+         Case &HF5 : Call Dos_error( "SD drive write1" )
+         Case &HF6 : Call Dos_error( "SD drive write2" )
+         Case &HF7 : Call Dos_error( "SD drive write3" )
+         Case &HF8 : Call Dos_error( "SD drive write4" )
       End Select
    End If
+
+
 End Sub
 
 
@@ -2824,46 +2863,52 @@ Sub Write_prg_file(byval Prg_filename As String)
 
   Open Prg_filename For Output As #20
 
-  ' P_pc ist der Logische Befehlszaehler , Von 0-254
-  ' K_num_prg ist die Anzahl der Programmspeicher also 255
+  If Gbdoserror = 0 Then
 
-  S_p_pc = P_pc
+     ' P_pc ist der Logische Befehlszaehler , Von 0-254
+     ' K_num_prg ist die Anzahl der Programmspeicher also 255
 
-  ' Print #1 , "Write_prg_file " ; Prg_filename
+     S_p_pc = P_pc
 
-  For Indx = P_pc To K_num_prg
+     ' Print #1 , "Write_prg_file " ; Prg_filename
 
-     Incr P_pc                                              ' Logisch / physisch
+     For Indx = P_pc To K_num_prg
 
-     Code_word = Ee_program(p_pc)
-     Call Roll_anzeige()
-     Call Display_code_line(code_word)
-     Call Anzeigen()
+        Incr P_pc                                           ' Logisch / physisch
 
-     For Sc = 1 To 16
-       Nc = 17 - Sc
-       Zch = W_st(nc)
-       Insertchar Code_line , Sc , Zch
-     Next Sc
+        Code_word = Ee_program(p_pc)
+        Call Roll_anzeige()
+        Call Display_code_line(code_word)
+        Call Anzeigen()
 
-     Insertchar Code_line , 17 , 0
+        For Sc = 1 To 16
+           Nc = 17 - Sc
+           Zch = W_st(nc)
+           Insertchar Code_line , Sc , Zch
+        Next Sc
 
-     Print #20 , Code_line
+        Insertchar Code_line , 17 , 0
 
-     Waitms 200
+        Print #20 , Code_line
 
-     Zch = High(code_word)                                  ' High-Teil - War das END?
+        Waitms 200
 
-     If Zch = K_end Then Goto Close_out_file
+        Zch = High(code_word)                               ' High-Teil - War das END?
 
-  Next Indx
+        If Zch = K_end Then Goto Close_out_file
+
+     Next Indx
 
 Close_out_file:
-  Close #20
+     Close #20
 
-  ' Print #1 , "Closed " ; Prg_filename
+     ' Print #1 , "Closed " ; Prg_filename
 
-  P_pc = S_p_pc
+     P_pc = S_p_pc
+  Else
+     Call Dos_error( "Cannot Open File")                    ' Fehler beim Open
+     Wait 5
+  End If
 
 End Sub Write_prg_file
 
@@ -2902,66 +2947,73 @@ Sub Read_prg_file(byval Prg_filename As String)
 
   Open Prg_filename For Input As #20
 
-  ' P_pc ist der Logische Befehlszaehler , Von 0-254
-  ' K_num_prg ist die Anzahl der Programmspeicher also 255
+  If Gbdoserror = 0 Then
 
-  S_p_pc = P_pc
+     ' P_pc ist der Logische Befehlszaehler , Von 0-254
+     ' K_num_prg ist die Anzahl der Programmspeicher also 255
 
-  While P_pc < K_num_prg                                    ' Print #1 , "Read_prg_file " ; Prg_filename
+     S_p_pc = P_pc
 
-     Input #20 , Code_line
-     If Eof(#20) <> 0 Then Goto Close_in_file
+     While P_pc < K_num_prg                                 ' Print #1 , "Read_prg_file " ; Prg_filename
 
-     Call Roll_anzeige()
+        Input #20 , Code_line
+        If Eof(#20) <> 0 Then Goto Close_in_file
 
-     For Qpos = 1 To 16
-         Wpos = 17 - qpos
-         Wrkchar = Mid(code_line , Qpos , 1)
-         W_st(wpos) = Wrkchar
-     Next Qpos
+        Call Roll_anzeige()
 
-     Code_adress = Mid(code_line , 2 , 3)
-     P_pc = Val(code_adress)
+        For Qpos = 1 To 16
+           Wpos = 17 - Qpos
+           Wrkchar = Mid(code_line , Qpos , 1)
+           W_st(wpos) = Wrkchar
+        Next Qpos
 
-     If P_pc > K_num_prg Then
-        Call Dos_error( "A" , "X")
-        Goto Close_in_file
-     End If
+        Code_adress = Mid(code_line , 2 , 3)
+        P_pc = Val(code_adress)
 
-     Incr P_pc                                              ' physische Speicheradresse
+        If P_pc > K_num_prg Then
+           Call Dos_error( "Prg. Overflow")
+           Goto Close_in_file
+        End If
 
-     Code_code = Mid(code_line , 5 , 7)
-     C_code = Decode_kdo(code_code)
+        Incr P_pc                                           ' physische Speicheradresse
 
-     Code_idx = Mid(code_line , 13 , 2)
-     Code_idxc = Compare(code_idx , Code_idxs , 2)
-     If Code_idxc = 0 Then
-        C_code = C_code + 128                               ' Index bedeutet 128 drauf
-        Code_opadr = Mid(code_line , 15 , 2)
-     Else
-        Code_opadr = Mid(code_line , 14 , 3)
-     End If
+        Code_code = Mid(code_line , 5 , 7)
+        C_code = Decode_kdo(code_code)
 
-     C_opadr = Val(code_opadr)                              ' Logische Speicheradresse
+        Code_idx = Mid(code_line , 13 , 2)
+        Code_idxc = Compare(code_idx , Code_idxs , 2)
+        If Code_idxc = 0 Then
+           C_code = C_code + 128                            ' Index bedeutet 128 drauf
+           Code_opadr = Mid(code_line , 15 , 2)
+        Else
+           Code_opadr = Mid(code_line , 14 , 3)
+        End If
 
-     Wzch = C_code * 256
-     Wzch = Wzch + C_opadr
-     Ee_program(p_pc) = Wzch                                ' von Buffer nach EEPROM umkopieren
+        C_opadr = Val(code_opadr)                           ' Logische Speicheradresse
 
-     Call Anzeigen()
+        Wzch = C_code * 256
+        Wzch = Wzch + C_opadr
+        Ee_program(p_pc) = Wzch                             ' von Buffer nach EEPROM umkopieren
 
-     Waitms 200
+        Call Anzeigen()
 
-     If C_code = K_end Then Goto Close_in_file
+        Waitms 200
 
-  Wend
+        If C_code = K_end Then Goto Close_in_file
+
+     Wend
 
 Close_in_file:
-  Close #20
+     Close #20
 
-  ' Print #1 , "Closed " ; Prg_filename
+     ' Print #1 , "Closed " ; Prg_filename
 
-  P_pc = S_p_pc
+     P_pc = S_p_pc
+
+  Else
+     Call Dos_error( "Cannot Open File")                    ' Fehler beim Open
+     Wait 5
+  End If
 
 End Sub Read_prg_file
 
