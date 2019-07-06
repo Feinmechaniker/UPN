@@ -45,17 +45,11 @@
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
 
-' Lock, low, High,  Extend
-' $prog &HFF , &H62 , &HD9 , &HFF                             ' generated. Take care that the chip supports all fuse bytes.
-$prog &HFF , &HE2 , &HD9 , &HFF                             ' generated. Take care that the chip supports all fuse bytes.
+$prog &HFF , &H62 , &HD9 , &HFF                             ' generated. Take care that the chip supports all fuse bytes.
 
-' $crystal = 11059700                                         ' Quarzfrequenz 11.0597 MHz
-$crystal = 8000000                                          ' Kein Quarz: 8MHz
+$crystal = 11059700                                         ' Quarzfrequenz 11.0597 MHz
 
-' $baud = 115200                                              ' Baudrate der UART: 115200 Baud
-$baud = 9600                                                ' Baudrate der UART: 9600 Baud
-
-Osccal = 74                                                 ' Kalibrierter interner Qsci
+$baud = 115200                                              ' Baudrate der UART: 115200 Baud
 
 ' Echo Off
 
@@ -2498,111 +2492,109 @@ End Sub Rolldown
 ' Die Kommandos zaehlen einfach hoch, "F" macht dann noch mal K_F_OFFSET drauf (in der Polling-Routine)
 ' ========================================================================
 Function Key2kdo(incode As Byte) As Byte
-
    Key2kdo = 0                                              ' Default, nokey
-
-' auf dem Testboard habe ich eine andere Tastaturbelegung
    Select Case Incode
-     Case 36
+     Case 1
         Key2kdo = K_enter                                   ' "Enter"
-     Case 37
+     Case 2
         Key2kdo = K_chgxy                                   ' x <-> y
-     Case 38
+     Case 3
         Key2kdo = K_recall                                  ' RCL
-     Case 39
+     Case 4
         Key2kdo = K_store                                   ' STO
 
-     Case 31
+     Case 5
         Key2kdo = K_plus                                    ' "+"
-     Case 32
+     Case 6
         Key2kdo = K_minus                                   ' "-"
-     Case 33
+     Case 7
         Key2kdo = K_mal                                     ' "*"
-     Case 34
+     Case 8
         Key2kdo = K_durch                                   ' "/"
 
-     Case 26
+     Case 9
         Key2kdo = K_clearx                                  ' CX
-     Case 27
+     Case 10
         Key2kdo = "3"                                       ' 51
-     Case 28
+     Case 11
         Key2kdo = "6"                                       ' 54
-     Case 29
+     Case 12
         Key2kdo = "9"                                       ' 57
 
-     Case 21
+     Case 13
         Key2kdo = "0"                                       ' 48
-     Case 22
+     Case 14
         Key2kdo = "2"                                       ' 50
-     Case 23
+     Case 15
         Key2kdo = "5"                                       ' 53
-     Case 24
+     Case 16
         Key2kdo = "8"                                       ' 56
 
-     Case 16
-        Key2kdo = K_point                                   ' "."
      Case 17
-        Key2kdo = "1"                                       ' 49
+        Key2kdo = K_point                                   ' "."
      Case 18
-        Key2kdo = "4"                                       ' 52
+        Key2kdo = "1"                                       ' 49
      Case 19
+        Key2kdo = "4"                                       ' 52
+     Case 20
         Key2kdo = "7"                                       ' 55
 
-     Case 11
+     Case 21
         Key2kdo = K_sqrt                                    ' SQRT
-     Case 12
+     Case 22
         Key2kdo = K_tangens                                 ' "Tangens"
-     Case 13
+     Case 23
         Key2kdo = P_return                                  ' RETURN
-     Case 14
+     Case 24
         Key2kdo = P_start                                   ' START / STOP
 
-     Case 6
+     Case 25
         Key2kdo = K_xhochy                                  ' x hoch y
-     Case 7
+     Case 26
         Key2kdo = K_cosinus                                 ' "Cosinus"
-     Case 8
+     Case 27
         Key2kdo = P_gosub                                   ' GOSUB
-     Case 9
+     Case 28
         Key2kdo = K_index                                   ' "Index"
 
-     Case 1
+     Case 29
         Key2kdo = K_logn                                    ' LN
-     Case 2
+     Case 30
         Key2kdo = K_sinus                                   ' "Sinus"
-     Case 3
+     Case 31
         Key2kdo = P_goto                                    ' GOTO
-     Case 4
+     Case 32
         Key2kdo = K_zweit                                   ' "F" - Zweitbelegung der Tasten
 
    End Select
 
 
    ' im HEX-Darstellungsmodus bekommen die Sinus-tan und ln-sqrt eine andere Funktion,
-   ' nÃ¤mlich der Zifferneingabe fÃ¼r A-F
+   ' naemlich der Zifferneingabe fuer A-F
 
    If Ee_fixflag = S_disp_hex Then                          ' Wenn wir im Hex-modus sind, nur Integer
      Select Case Incode
-       Case 11
+       Case 21
           Key2kdo = K_hex_c                                 ' "C"
-       Case 12
+       Case 22
           Key2kdo = K_hex_f                                 ' "F"
-       Case 6
+       Case 25
           Key2kdo = K_hex_b                                 ' "B"
-       Case 7
+       Case 26
           Key2kdo = K_hex_e                                 ' "E"
-       Case 1
+       Case 29
           Key2kdo = K_hex_a                                 ' "A"
-       Case 2
+       Case 30
           Key2kdo = K_hex_d                                 ' "D"
      End Select
    End If
 
+   ' Die File-Befehle brauchen noch einen Platz auf dem Keyboard
    ' Testweise auf den Sin / Cos Tasten ist jetzt SFILE / LFILE
    Select Case Incode
-      Case 2
+      Case 30
           Key2kdo = K_sd_write                              ' Save 2 disk
-      Case 7
+      Case 26
           Key2kdo = K_sd_read                               ' read from disk
    End Select
 
