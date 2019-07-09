@@ -41,6 +41,7 @@
 ' 01.07.19  V  04.04 AVR-DOS zum SD-Karten-Zugriff
 ' 02.07.19  V  04.05 Bugfix SD-CARD-Leseroutine, Filenamenhandling, Anzeigemodus bei Kartenaktionen
 ' 06.07.19  V  04.06 SD Initialisierung ohne Reboot, Bessere Fehlermeldungen
+' 09.07.19  V  04.07 Leseroutine korrigiert (letzte Zeile), Behandlung von Syntaxfehlern beim Dateilesen
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -62,7 +63,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.06"                                   '
+Const K_version = "04.07"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -2925,8 +2926,8 @@ Sub Read_prg_file(byval Prg_filename As String)
   Local C_code As Byte
   Local C_opadr As Byte
 
-  ' Local Nc As Byte
-  ' Local Sc As Byte
+  Local N_a As Byte
+
   Local S_p_pc As Byte
   Local Code_word As Word
 
@@ -2946,10 +2947,9 @@ Sub Read_prg_file(byval Prg_filename As String)
 
      S_p_pc = P_pc
 
-     While P_pc < K_num_prg                                 ' Print #1 , "Read_prg_file " ; Prg_filename
+     Do
 
-        Input #20 , Code_line
-        If Eof(#20) <> 0 Then Goto Close_in_file
+        Lineinput #20 , Code_line
 
         Call Roll_anzeige()
 
@@ -2972,6 +2972,13 @@ Sub Read_prg_file(byval Prg_filename As String)
         Code_code = Mid(code_line , 5 , 7)
         C_code = Decode_kdo(code_code)
 
+        If C_code = 255 Then                                ' Error decoding kommando
+           Call Dos_error( "Syntax Error")
+           Wait 5
+           Decr P_pc                                        ' logische Speicheradresse
+           Goto Close_in_file
+        End If
+
         Code_idx = Mid(code_line , 13 , 2)
         Code_idxc = Compare(code_idx , Code_idxs , 2)
         If Code_idxc = 0 Then
@@ -2991,16 +2998,19 @@ Sub Read_prg_file(byval Prg_filename As String)
 
         Waitms 200
 
-        If C_code = K_end Then Goto Close_in_file
+        If C_code = K_end Then Goto End_close_in_file
 
-     Wend
+     Loop Until Eof(#20) <> 0
+
+End_close_in_file:
+
+     P_pc = S_p_pc
 
 Close_in_file:
      Close #20
 
      ' Print #1 , "Closed " ; Prg_filename
 
-     P_pc = S_p_pc
 
   Else
      Call Dos_error( "Cannot Open File")                    ' Fehler beim Open
@@ -3024,7 +3034,7 @@ Local Tmp_fcode As String * 8
 Local Len1 As Byte
 Local Len2 As Byte
 
-Decode_kdo = 0
+Decode_kdo = 255
 
 Cmp_string = Ucase(kmd_string)
 Cmp_string = Trim(cmp_string)
