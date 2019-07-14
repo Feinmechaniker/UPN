@@ -42,6 +42,7 @@
 ' 02.07.19  V  04.05 Bugfix SD-CARD-Leseroutine, Filenamenhandling, Anzeigemodus bei Kartenaktionen
 ' 06.07.19  V  04.06 SD Initialisierung ohne Reboot, Bessere Fehlermeldungen
 ' 09.07.19  V  04.07 Leseroutine korrigiert (letzte Zeile), Behandlung von Syntaxfehlern beim Dateilesen
+' 14.07.19  V  04.08 Eex-Funktion in der Eingabe
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -63,7 +64,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.07"                                   '
+Const K_version = "04.08"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -82,6 +83,7 @@ Const Block_communication = 1
 ' Wenn mit Interrupt, dann diese Config
 Config Serialin = Buffered , Size = 20
 #endif
+
 
 '-------------------------------------------------------------------------------------
 ' SPI-Interface für DOGM163-Display
@@ -197,7 +199,8 @@ Declare Function Encode_kdo(byval Inputkey As Byte) As String
 Declare Function Decode_kdo(byval Kmd_string As String) As Byte
 
 ' Eingabefunktionen
-Declare Sub Translate_x()                                   ' uebersetzen wir das Eingaberegister nach x
+Declare Sub Translate_full()                                ' Eingaberegister mit Mantisse und Exponenet übersetzen
+Declare Sub Translate_input()                               ' uebersetzen wir das Eingaberegister in eine Zahl
 Declare Sub Clear_input()                                   ' Eingaberegister leeren
 Declare Sub Input_number()                                  ' Zahleneingabe ins Eingaberegister
 Declare Sub Input_to_rx()                                   ' Den Inhalt von Trans_input nach Rx bringen
@@ -246,6 +249,7 @@ Const K_num_prg = 255                                       ' Anzahl der Program
 ' 1. Flags
 Dim Z_inputflag As Bit                                      ' Es wurde vor dem Kommand bereits mindestens eine Ziffer eingegeben
 Dim Sleepflag As Integer
+Dim Eex_flag As Byte                                        ' Wir geben gerade einen Exponent im "E" - Modus ein
 
 ' 2. Rechenregister
 Dim Rx As Double
@@ -255,7 +259,7 @@ Dim Rt As Double
 Dim Lstx As Double
 
 ' 3. Speicher fuer die Anzeige
-Dim I_st(16) As Byte                                        ' Eingabe-Register
+Dim I_st(17) As Byte                                        ' Eingabe-Register
 Dim T_st(16) As Byte                                        ' Das Anzeige-Register fuer die erste Zeile
 Dim V_st(16) As Byte                                        ' Das Anzeige-Register fuer die zweite Zeile
 Dim W_st(16) As Byte                                        ' Das Anzeige-Register fuer die dritte Zeile
@@ -301,7 +305,7 @@ Dim Ee_mem(k_num_mem) As Eram Double                        ' Die persistente Va
 Dim Ee_program_valid As Eram Byte                           ' Der Inhalt des EEPROM koennte etwas sinnvolles sein
 Dim Ee_program(k_num_prg) As Eram Word                      ' Das Programm steht im EEPROM, 255 Speicherzellen 1 Byte code, 1 Byte Adresse
 
-' 7. FÃ¼r die Programmierung brauchen wir natÃ¼rlich noch mehr
+' 7. Fuer die Programmierung brauchen wir natÃ¼rlich noch mehr
 Dim P_stack(16) As Byte                                     ' FÃ¼r die Returns bei GOSUB
 Dim P_sp As Byte                                            ' Stackpointer, eigentlich ein Index
 Dim P_pc As Byte                                            ' Der Programmzeiger, Logisch, 0-254
@@ -370,6 +374,8 @@ Const K_sdd_read = 27                                       ' 25 - read Data fro
 Const K_sinus = 28                                          ' 28  - SINUS
 Const K_cosinus = 29                                        ' 29  - COSINUS
 Const K_tangens = 30                                        ' 30  - TANGENS
+
+Const K_eex = 31                                            ' 31  - Eex-Eingabe
 
 Const K_hex_a = 58                                          ' Hex A
 Const K_hex_b = 59                                          ' Hex B
@@ -512,6 +518,8 @@ Rz = 0.0
 Rt = 0.0
 Lstx = 0.0
 
+Eex_flag = 0
+
 ' Ausgaberegister leeren und Display initialisieren
 Call Clear_output
 Call Clear_input                                            ' Eingaberegister leeren
@@ -618,6 +626,7 @@ Sub Polling()
          Pressedkey = X_kommando
          Call Input_number()
       Else
+         Eex_flag = 0
          Retval = Exec_kdo()
          If Retval <> 0 Then
             P_goflag = 0                                    ' Ein Fehler haelt die Programmausfuehrung an
@@ -877,9 +886,14 @@ End Sub Kill_run
 Function Digit_input(byval Inputkey As Byte) As Byte
    Digit_input = 0
    If Inputkey >= "0" And Inputkey <= "9" Then Digit_input = 1
-   If Inputkey = K_point Then Digit_input = 1               ' Der Dezimalpunkt
+   If Eex_flag = 0 And Inputkey = K_point Then Digit_input = 1       ' Der Dezimalpunkt
    If Inputkey = K_index Then Digit_input = 1
+   If Inputkey = K_eex Then Digit_input = 1
    If Inputkey >= K_hex_a And Inputkey <= K_hex_f Then Digit_input = 1       ' Hex-Ziffern
+   If Eex_flag = 1 And Inputkey = K_minus Then Digit_input = 1       ' Das Minus im Exponent, nur als erstes Zeichen
+
+   ' Print #1 , Inputkey ; " is_number " ; Digit_input
+
 End Function Digit_input
 
 
@@ -989,10 +1003,13 @@ End Function Is_transparent
 ' in Pressedkey steht der ASCII-Wert der gedrueckten Taste, zwischen "0" und "9"
 ' Oder ein "."
 ' oder ein code K_hex_a bis K_hex_f
+' oder ein K_eex
 ' ========================================================================
 Sub Input_number()
 
 Local N_3 As Byte
+
+    ' Print #1 , "Input_number " ; Pressedkey ; " i_pt= " ; I_pt ; " Z_inputflag= " ; Z_inputflag ; " Eex_flag= " ; Eex_flag
 
     If Pressedkey = K_index Then Goto No_input_dp           ' In der Zahleneingabe ist der Index-Key unsinnig
     If Ee_fixflag = S_disp_hex And Pressedkey = K_point Then Goto No_input_dp
@@ -1001,32 +1018,59 @@ Local N_3 As Byte
        For N_3 = 1 To 16
            V_st(n_3) = W_st(n_3)
        Next N_3
+       Eex_flag = 0                                         ' Beim Umschalten auf Zahleneingabe fangen wir mit der Mantisse an
+       ' Wenn Eex als Erste Eingabe einer Zahleneingabe erfolgt ist, ist das unsinn
+       If Pressedkey = K_eex Then Goto No_input_dp
     End If
 
-    Z_inputflag = 1
-    If I_pt = 2 And I_st(1) = "0" And Pressedkey <> K_point Then I_pt = 1       ' "0"-Verriegelung d.h 00 am Anfang ist unsinn
+    Z_inputflag = 1                                         ' Es kann los gehn mit der Zahleneingabe
 
-    If I_pt <= 16 Then
-       If Pressedkey = K_point And I_pt > 1 Then
-          Call Clean_dp_in_input(i_pt)
-       End If
+    ' Das K_eex schreibt ein E und trennt Mantisse von Exponent
+    If Pressedkey = K_eex Then
+       ' Hier sollte erst mal noch die Mantisse gecheckt werden 0 darf sie nicht sein
+       Call Translate_input()
+       If Trans_input = 0 Then Goto No_input_dp
+       ' Wenn wir schon ein E haben, dann reicht es
+       If Eex_flag > 0 Then Goto No_input_dp
 
-       If Pressedkey = K_point And I_pt = 1 Then
-          I_st(1) = "0"
+       If I_pt <= 12 Then                                   ' 12 Mantissenstellen
+          Eex_flag = 1                                      ' OK, wir akzeptieren im Folgenden einen Exponenten
+          ' Im Exponent sollte dann auch die Eingabe von "-" moeglich sein
+          I_st(i_pt) = "E"
           Incr I_pt
        End If
 
-       If Pressedkey = K_point Then
-          I_st(i_pt) = D_char_dp
-       Else
-          If Pressedkey >= K_hex_a And Pressedkey <= K_hex_f Then
-             I_st(i_pt) = Pressedkey + 7                    ' K_hex_a -> "A"
-          Else
-             I_st(i_pt) = Pressedkey
-          End If
-       End If
+    Else
 
-       Incr I_pt
+       If I_pt = 2 And I_st(1) = "0" And Pressedkey <> K_point Then I_pt = 1       ' "0"-Verriegelung d.h 00 am Anfang ist unsinn
+
+       If I_pt <= 16 Then
+          If Pressedkey = K_point And I_pt > 1 Then
+             Call Clean_dp_in_input(i_pt)
+          End If
+
+          If Pressedkey = K_point And I_pt = 1 Then
+             I_st(1) = "0"
+             Incr I_pt
+          End If
+
+          If Pressedkey = K_point Then
+             I_st(i_pt) = D_char_dp
+          Else
+             If Pressedkey >= K_hex_a And Pressedkey <= K_hex_f Then
+                I_st(i_pt) = Pressedkey + 7                 ' K_hex_a -> "A"
+             Else
+                If Pressedkey = K_minus Then
+                   I_st(i_pt) = "-"
+                Else
+                   I_st(i_pt) = Pressedkey
+                End If
+             End If
+             If Eex_flag > 0 Then Incr Eex_flag             ' Nur direkt hinter dem "E" ist das "-" moeglich
+          End If
+
+          Incr I_pt
+       End If
     End If
 
     ' If Ee_fixflag = S_disp_hex Then                         ' HEX - Anzeige
@@ -1284,7 +1328,7 @@ End Sub Dos_error
 
 ' ========================================================================
 ' Die Anzeigefunktion, wir interpretieren Ry und Rx in das V_st und W_st Register
-' Im Programmiermodus wird der zum PC gehÃ¶rige Programmspeicher angezeigt
+' Im Programmiermodus wird der zum PC gehoerige Programmspeicher angezeigt
 ' ========================================================================
 Sub Interpr_xy()
    Local N As Byte
@@ -1859,9 +1903,37 @@ End Sub Show_version
 
 
 ' ========================================================================
-' uebersetzen wir das Eingaberegister nach x
+' uebersetzen wir das Eingaberegister (incl Mantisse und Exponent) nach Trans_input
+' I_st() enthaelt die Eingabedaten
+' Trans_input bekommt am Ende das Ergebnis
+' Die Funktion aus der Double-Bibliothek ist viel besser als die selbstgemachte ...
+' Hier koennte jetzt auch "-" an erster Stelle erscheinen, das muss behandelt werden
+'
 ' ========================================================================
-Sub Translate_x()
+Sub Translate_full()
+   Local Work_str As String * 17
+
+   I_st(17) = 0x00                                          ' String Terminator, sicher ist sicher
+
+   ' Im Hex-Modus ist unsere eigene Funktion ganz gut
+   If Ee_fixflag = S_disp_hex Then
+      Call Translate_input()
+   Else
+       ' Trimmmen der Eingabe ist auch noch noetig
+      Work_str = Trim(i_st)
+      Trans_input = Val(work_str)
+   End If
+
+End Sub Translate_full
+
+' ========================================================================
+' uebersetzen eine Zeichenkette im Eingaberegister nach Trans_input
+' I_st() enthaelt die Eingabedaten
+' I_pt ist die Laenge der auszuwertenden Zeichenkette
+' Trans_input bekommt am Ende das Ergebnis
+' ========================================================================
+Sub Translate_input()
+
    Local Stelle As Double
    Local Below_one As Double
    Local Decflag As Byte
@@ -1896,8 +1968,7 @@ Sub Translate_x()
            End If
         End If
    Next N_1
-End Sub Translate_x
-
+End Sub Translate_input
 
 
 ' ========================================================================
@@ -2142,6 +2213,8 @@ Function Exec_kdo() As Byte
 
     Exec_kdo = 0                                            ' Default: OK
 
+    Eex_flag = 0                                            ' Wenn ein Kommando ausgefuehrt wird ist die Zahleneingabe definitiv zuende
+
     ' Wir haben dynamische Adressen, wir muessen diese hier abpruefen,
     Aerr_flg = Adress_check(x_adresse)
     If Aerr_flg = 1 Then                                    ' Adressfehler!
@@ -2159,7 +2232,7 @@ Function Exec_kdo() As Byte
             Call Anzeigen
             Goto Finish_kdo
        Else
-          Call Translate_x
+          Call Translate_full
           Call Enter
           Call Input_to_rx
        End If
@@ -2591,12 +2664,14 @@ Function Key2kdo(incode As Byte) As Byte
    End If
 
    ' Die File-Befehle brauchen noch einen Platz auf dem Keyboard
-   ' Testweise auf den Sin / Cos Tasten ist jetzt SFILE / LFILE
+   ' Testweise auf den Tasten 33-35 ist jetzt SFILE / LFILE / EEX
    Select Case Incode
-      Case 30
+      Case 33
           Key2kdo = K_sd_write                              ' Save 2 disk
-      Case 26
+      Case 34
           Key2kdo = K_sd_read                               ' read from disk
+      Case 35
+          Key2kdo = K_eex                                   ' Eng-Eingabe
    End Select
 
 End Function Key2kdo
@@ -2754,6 +2829,8 @@ Function Encode_kdo(byval Inputkey As Byte) As String
           Encode_kdo = "E"
      Case K_hex_f
           Encode_kdo = "F"
+     Case K_eex
+          Encode_kdo = "EEX"
    End Select
 
 End Function Encode_kdo
