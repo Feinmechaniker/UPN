@@ -43,6 +43,7 @@
 ' 06.07.19  V  04.06 SD Initialisierung ohne Reboot, Bessere Fehlermeldungen
 ' 09.07.19  V  04.07 Leseroutine korrigiert (letzte Zeile), Behandlung von Syntaxfehlern beim Dateilesen
 ' 14.07.19  V  04.08 Eex-Funktion in der Eingabe
+' 15.07.19  V  04.09 8x5 Tastenbelegung
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -64,7 +65,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.08"                                   '
+Const K_version = "04.09"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -2568,111 +2569,115 @@ End Sub Rolldown
 Function Key2kdo(incode As Byte) As Byte
    Key2kdo = 0                                              ' Default, nokey
    Select Case Incode
+
      Case 1
-        Key2kdo = K_enter                                   ' "Enter"
+                Key2kdo = "8"                               ' 56
      Case 2
-        Key2kdo = K_chgxy                                   ' x <-> y
+                Key2kdo = K_durch                           ' "/"
      Case 3
-        Key2kdo = K_recall                                  ' RCL
+                Key2kdo = "5"                               ' 53
      Case 4
-        Key2kdo = K_store                                   ' STO
+                Key2kdo = "2"                               ' 50
 
      Case 5
-        Key2kdo = K_plus                                    ' "+"
+                Key2kdo = K_point                           ' "."
      Case 6
-        Key2kdo = K_minus                                   ' "-"
+                Key2kdo = "7"                               ' 55
      Case 7
-        Key2kdo = K_mal                                     ' "*"
+                Key2kdo = K_mal                             ' "*"
      Case 8
-        Key2kdo = K_durch                                   ' "/"
+                Key2kdo = "4"                               ' 52
 
      Case 9
-        Key2kdo = K_clearx                                  ' CX
+                Key2kdo = "1"                               ' 49
      Case 10
-        Key2kdo = "3"                                       ' 51
+                Key2kdo = "0"                               ' 48
      Case 11
-        Key2kdo = "6"                                       ' 54
+                Key2kdo = K_tangens                         ' "Tangens"
      Case 12
-        Key2kdo = "9"                                       ' 57
+                Key2kdo = K_minus                           ' "-"
 
      Case 13
-        Key2kdo = "0"                                       ' 48
+                Key2kdo = K_eex                             ' Eng-Eingabe
      Case 14
-        Key2kdo = "2"                                       ' 50
+                Key2kdo = K_enter                           ' "Enter"
      Case 15
-        Key2kdo = "5"                                       ' 53
+                Key2kdo = K_enter                           ' "Enter"
      Case 16
-        Key2kdo = "8"                                       ' 56
+                Key2kdo = K_cosinus                         ' "Cosinus"
 
      Case 17
-        Key2kdo = K_point                                   ' "."
+                Key2kdo = K_plus                            ' "+"
      Case 18
-        Key2kdo = "1"                                       ' 49
+                Key2kdo = K_nop                             ' Noch frei
      Case 19
-        Key2kdo = "4"                                       ' 52
+                Key2kdo = K_chgxy                           ' x <-> y
      Case 20
-        Key2kdo = "7"                                       ' 55
+                Key2kdo = K_recall                          ' RCL
 
      Case 21
-        Key2kdo = K_sqrt                                    ' SQRT
+                Key2kdo = K_sinus                           ' "Sinus"
      Case 22
-        Key2kdo = K_tangens                                 ' "Tangens"
+                Key2kdo = "9"                               ' 57
      Case 23
-        Key2kdo = P_return                                  ' RETURN
+                Key2kdo = K_nop                             ' Noch frei
      Case 24
-        Key2kdo = P_start                                   ' START / STOP
+                Key2kdo = P_return                          ' RETURN
 
      Case 25
-        Key2kdo = K_xhochy                                  ' x hoch y
+                Key2kdo = K_store                           ' STO
      Case 26
-        Key2kdo = K_cosinus                                 ' "Cosinus"
+                Key2kdo = "6"                               ' 54
      Case 27
-        Key2kdo = P_gosub                                   ' GOSUB
+                Key2kdo = K_xhochy                          ' x hoch y
      Case 28
-        Key2kdo = K_index                                   ' "Index"
+                Key2kdo = K_nop                             ' Noch frei
 
      Case 29
-        Key2kdo = K_logn                                    ' LN
+                Key2kdo = P_gosub                           ' GOSUB
      Case 30
-        Key2kdo = K_sinus                                   ' "Sinus"
+                Key2kdo = K_index                           ' "Index"
      Case 31
-        Key2kdo = P_goto                                    ' GOTO
+                Key2kdo = "3"                               ' 51
      Case 32
-        Key2kdo = K_zweit                                   ' "F" - Zweitbelegung der Tasten
+                Key2kdo = K_logn                            ' LN
 
+     Case 33
+                Key2kdo = K_sd_read                         ' read from disk
+     Case 34
+                Key2kdo = P_goto                            ' GOTO
+     Case 35
+                Key2kdo = K_zweit                           ' "F" - Zweitbelegung der Tasten
+     Case 36
+                Key2kdo = K_clearx                          ' CX
+
+     Case 37
+                Key2kdo = K_sqrt                            ' SQRT
+     Case 38
+                Key2kdo = K_sd_write                        ' Save 2 disk
+     Case 39
+                Key2kdo = P_start                           ' START / STOP
    End Select
-
 
    ' im HEX-Darstellungsmodus bekommen die Sinus-tan und ln-sqrt eine andere Funktion,
    ' naemlich der Zifferneingabe fuer A-F
 
    If Ee_fixflag = S_disp_hex Then                          ' Wenn wir im Hex-modus sind, nur Integer
      Select Case Incode
+       Case 37
+                Key2kdo = K_hex_a                           ' "A"
+       Case 32
+                Key2kdo = K_hex_b                           ' "B"
+       Case 27
+                Key2kdo = K_hex_c                           ' "C"
        Case 21
-          Key2kdo = K_hex_c                                 ' "C"
-       Case 22
-          Key2kdo = K_hex_f                                 ' "F"
-       Case 25
-          Key2kdo = K_hex_b                                 ' "B"
-       Case 26
-          Key2kdo = K_hex_e                                 ' "E"
-       Case 29
-          Key2kdo = K_hex_a                                 ' "A"
-       Case 30
-          Key2kdo = K_hex_d                                 ' "D"
+                Key2kdo = K_hex_d                           ' "D"
+       Case 16
+                Key2kdo = K_hex_e                           ' "E"
+       Case 11
+                Key2kdo = K_hex_f                           ' "F"
      End Select
    End If
-
-   ' Die File-Befehle brauchen noch einen Platz auf dem Keyboard
-   ' Testweise auf den Tasten 33-35 ist jetzt SFILE / LFILE / EEX
-   Select Case Incode
-      Case 33
-          Key2kdo = K_sd_write                              ' Save 2 disk
-      Case 34
-          Key2kdo = K_sd_read                               ' read from disk
-      Case 35
-          Key2kdo = K_eex                                   ' Eng-Eingabe
-   End Select
 
 End Function Key2kdo
 
