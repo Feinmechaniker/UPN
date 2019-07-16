@@ -532,6 +532,7 @@ Call Anzeigen
 ' 3 Sekunden lang die Version anzeigen
 Waitms 3000
 
+
 ' Jetzt den Timer einstellen,
 On Timer0 Polling                                           'Interrupt-Routine fÃ¼r Timer0-Overflow
 Config Timer0 = Timer , Prescale = 1024                     'Timer-Takt ist Quarz/1024
@@ -2393,12 +2394,12 @@ Function Exec_kdo() As Byte
          ' Else
          '   Z_inputflag = 0                                 ' Enter und Lstx - Behandlung nur, wenn als Kommando ausserhalb der Zifferneingabe
          End If
-      Case K_xhochy                                         ' x hoch y
+      Case K_xhochy                                         ' y hoch x
          Lstx = Rx
          ' Rx = log(Rx)
          ' Rx = Rx * Ry
          ' Rx = exp(Rx)
-         Rx = Rx ^ Ry
+         Rx = Ry ^ Rx
          Call Rolldown
       Case K_chgxy                                          ' x <-> y
          Lstx = Rx
