@@ -16,7 +16,7 @@
 '-------------------------------------------------------------------------------------
 ' Softwarebeschreibungen
 ' 255 Programmschritte (00-254) im EEPROM (K_num_prg)
-' 32 Zahlenspeicher (0-31) im EEPROM  (K_num_mem)
+' 64 Zahlenspeicher (0-63) im EEPROM  (K_num_mem)
 ' 16 Unterprogrammebenen mit GOSUB und RETURN
 '-------------------------------------------------------------------------------------
 ' This program is free software: you can redistribute it and/or modify
@@ -44,6 +44,7 @@
 ' 09.07.19  V  04.07 Leseroutine korrigiert (letzte Zeile), Behandlung von Syntaxfehlern beim Dateilesen
 ' 14.07.19  V  04.08 Eex-Funktion in der Eingabe
 ' 15.07.19  V  04.09 8x5 Tastenbelegung
+' 20.07.19  V  04.10 Voyager-Tastenbelegung und neue Funktionen (log10, 10^x, y^x ..)
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -65,7 +66,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.09"                                   '
+Const K_version = "04.10"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -338,6 +339,7 @@ Dim Zbuffer(16) As Byte                                     ' Lesepuffer der ser
 ' Obergrenze: 127
 ' Der Index-Key addiert auf die GOTO uns STORE/RCL-Funktionen ggf. 128 drauf
 
+Const P_nop = 255                                           ' NOP
 Const K_nop = 0                                             ' NOP
 Const K_plus = 1                                            ' "+"
 Const K_minus = 2                                           ' "-"
@@ -350,11 +352,11 @@ Const K_recall = 8                                          ' RCL
 Const K_sqrt = 9                                            ' SQRT
 Const P_goto = 10                                           '  Programming: GOTO
 Const P_gosub = 11                                          '  Programming: GOSUB
-Const P_return = 12                                         '  Programming: RETURN
-Const K_logn = 13                                           ' LN
-Const P_start = 14                                          '  Programming: START / STOP
+Const K_minusx = 12                                         ' 0.0 - x
+Const K_einsdrchx = 13                                      ' 1/x
+Const P_start = 14                                          ' Programming: START / STOP
 Const K_clearx = 15                                         ' CX
-Const K_xhochy = 16                                         ' x hoch y
+Const K_yhochx = 16                                         ' y hoch x
 Const K_chgxy = 17                                          ' x <-> y
 
 ' Rechnende Speicher
@@ -364,12 +366,12 @@ Const K_stominus = 19                                       ' STO -
 Const K_stomal = 20                                         ' STO *
 Const K_stodurch = 21                                       ' STO /
 
-Const K_index = 22                                          ' 22  - Index - nicht wirklich ein Key
-Const K_end = 23                                            ' 23 - Programmende (Marke)
-Const K_sd_write = 24                                       ' 24 - Save 2 disk
-Const K_sd_read = 25                                        ' 25 - read from disk
-Const K_sdd_write = 26                                      ' 24 - Save Data 2 disk
-Const K_sdd_read = 27                                       ' 25 - read Data from disk
+Const K_index = 22                                          ' Index - nicht wirklich ein Key
+Const K_end = 23                                            ' Programmende (Marke)
+' Const K_sd_write = 24                                       ' Save 2 disk
+' Const K_sd_read = 25                                        ' read from disk
+' Const K_sdd_write = 26                                      ' Save Data 2 disk
+' Const K_sdd_read = 27                                       ' read Data from disk
 
 ' Winkelfunktionen ! ACHTUNG geaenderter Code
 Const K_sinus = 28                                          ' 28  - SINUS
@@ -377,6 +379,14 @@ Const K_cosinus = 29                                        ' 29  - COSINUS
 Const K_tangens = 30                                        ' 30  - TANGENS
 
 Const K_eex = 31                                            ' 31  - Eex-Eingabe
+
+Const K_10hochx = 32                                        ' 10 ^ x
+Const P_vor = 33                                            ' Programming Schritt vorwaerts
+Const K_ehochx = 34                                         ' e hoch x
+Const K_int = 35                                            ' INT
+Const K_roll = 36                                           ' Rolldown
+
+' Zweitbelegungen, auch da hat sich einiges geaendert
 
 Const K_hex_a = 58                                          ' Hex A
 Const K_hex_b = 59                                          ' Hex B
@@ -387,43 +397,54 @@ Const K_hex_f = 63                                          ' Hex F
 
 Const K_f_offset = 64                                       ' Offset fuer die Zweitbelegung
 
-Const K_pause = K_plus + K_f_offset                         ' 65   - Pause, 1s warten mit Display an
-Const K_minusx = K_minus + K_f_offset                       ' 66   - 0.0 - x
-Const K_rnd = K_mal + K_f_offset                            ' 67   - RND
-Const K_einsdrchx = K_durch + K_f_offset                    ' 68   - 1/x
-Const K_fix2 = K_point + K_f_offset                         ' 69   - Umschalten Eng -> Fix2 -> H:M
-Const K_roll = K_enter + K_f_offset                         ' 70   - Roll Down
+Const K_rnd = K_plus + K_f_offset                           ' Zufallszahl
+' Const K_nop = K_minus + K_f_offset                          ' Noch frei
+Const K_grd = K_mal + K_f_offset                            ' grd / rad toggle   "0"
+Const K_fix2 = K_durch + K_f_offset                         ' - Umschalten Eng -> Fix2 -> H:M
 
-Const P_back = K_store + K_f_offset                         ' Programming step back                                  ' STO
-Const P_vor = K_recall + K_f_offset                         ' Programming step forward
+' Const = 48 + K_f_offset                                     ' Noch Frei
 
-Const K_quadr = K_sqrt + K_f_offset                         ' 73   - Quadrat
-Const P_ifbig = P_goto + K_f_offset                         ' 74   - If x groesser 0 goto
-Const P_ifequal = P_gosub + K_f_offset                      ' 75   - If x gleich 0 goto
-Const P_ifless = P_return + K_f_offset                      ' 76   - If x kleiner 0 goto
+Const P_ifxequaly = 49 + K_f_offset                         ' If x gleich y goto "1"
+Const P_ifxbigy = 50 + K_f_offset                           ' If x groesser y goto "2"
+Const P_ifxlessy = 51 + K_f_offset                          ' If x kleiner y goto "3"
 
-Const P_ifxbigy = 52 + K_f_offset                           ' 116   - If x groesser y goto "4"
-Const P_ifxequaly = 53 + K_f_offset                         ' 117   - If x gleich y goto "5"
-Const P_ifxlessy = 54 + K_f_offset                          ' 118   - If x kleiner y goto "6"
+Const P_ifequal = 52 + K_f_offset                           ' If x gleich 0 goto "4"
+Const P_ifbig = 53 + K_f_offset                             ' If x groesser 0 goto "5"
+Const P_ifless = 54 + K_f_offset                            ' If x kleiner 0 goto "6"
 
-Const P_loop7 = 55 + K_f_offset                             ' 116   - If $7++ > 0 goto "7"
-Const P_loop8 = 56 + K_f_offset                             ' 117   - If $8++ > 0 goto "8"
-Const P_loop9 = 57 + K_f_offset                             ' 118   - If $9++ > 0 goto "9"
+Const P_loop7 = 55 + K_f_offset                             '  If $7++ > 0 goto
+Const P_loop8 = 56 + K_f_offset                             '  If $8++ > 0 goto
+Const P_loop9 = 57 + K_f_offset                             '  If $9++ > 0 goto
 
-Const K_ehochx = K_logn + K_f_offset                        ' 77   - e hoch x
-Const P_auto = P_start + K_f_offset                         ' 78   - Umschaltung Run / Program
-Const P_nop = K_clearx + K_f_offset                         ' 79  - No Operation    "cx"
-Const K_pi = K_xhochy + K_f_offset                          ' 80  - Pi    "Ã¼ber x hoch y"
-Const K_lstx = K_chgxy + K_f_offset                         ' 81   - Lstx,
+' Const = K_point + K_f_offset                                ' Noch Frei
 
-Const K_grd = 48 + K_f_offset                               ' 112  - grd / rad toggle   "0"
-Const K_int = 49 + K_f_offset                               ' 113  - INT   "1"
-Const K_frac = 50 + K_f_offset                              ' 114  - FRAC  "2"
-Const K_abs = 51 + K_f_offset                               ' 115  - ABS   "3"
+Const K_asin = K_sinus + K_f_offset                         ' - ARCUS SINUS
+Const K_acos = K_cosinus + K_f_offset                       ' - ARCUS COSINUS
+Const K_atan = K_tangens + K_f_offset                       ' - ARCUS TANGENS
 
-Const K_asin = K_sinus + K_f_offset                         ' 92  - ARCUS SINUS
-Const K_acos = K_cosinus + K_f_offset                       ' 93  - ARCUS COSINUS
-Const K_atan = K_tangens + K_f_offset                       ' 94  - ARCUS TANGENS
+Const K_lstx = K_enter + K_f_offset                         ' Last X
+Const K_abs = K_eex + K_f_offset                            ' Absolutbetrag
+Const K_pi = K_minusx + K_f_offset                          ' Pi eben
+
+Const K_sd_read = K_recall + K_f_offset                     ' read program from disk
+Const K_clear_mem = K_clearx + K_f_offset                   ' Zahlenspeicher loeschen
+' Const = K_einsdrchx + K_f_offset                            ' Noch frei
+
+Const K_sd_write = K_store + K_f_offset                     ' write program to sd
+Const K_clear_prg = K_chgxy + K_f_offset                    ' Programmspeicher loeschen
+Const K_xhochy = K_yhochx + K_f_offset                      ' y ^ x
+
+Const K_frac = K_int + K_f_offset                           ' FRAC
+Const P_back = P_vor + K_f_offset                           ' Einen Schritt zurueck im Programmspeicher
+Const K_logx = K_10hochx + K_f_offset                       ' 10er-Logarithmus
+
+Const P_return = P_gosub + K_f_offset                       '  Programming: RETURN
+Const K_pause = P_goto + K_f_offset                         ' Pause, 1s warten mit Display an
+Const K_logn = K_ehochx + K_f_offset                        ' nat. Logarithmus
+
+Const K_quadr = K_sqrt + K_f_offset                         ' Quadrat
+Const P_auto = P_start + K_f_offset                         ' Programming: START / STOP
+Const K_rollup = K_roll + K_f_offset                        ' Rollup im Rechenregisterstapel
 
 Const K_zweit = 128                                         '
 
@@ -531,7 +552,6 @@ Call Anzeigen
 
 ' 3 Sekunden lang die Version anzeigen
 Waitms 3000
-
 
 ' Jetzt den Timer einstellen,
 On Timer0 Polling                                           'Interrupt-Routine fÃ¼r Timer0-Overflow
@@ -2291,6 +2311,12 @@ Function Exec_kdo() As Byte
          Ry = Rz
          Rz = Rt
          Rt = Lstx
+      Case K_rollup                                         ' Roll UP
+         Lstx = Rx
+         Rx = Rt
+         Rt = Rz
+         Rz = Ry
+         Ry = Lstx
       Case K_store                                          ' STO
          If L_adr > 0 And L_adr <= K_num_mem Then
             Ce_mem(l_adr) = Rx
@@ -2383,9 +2409,15 @@ Function Exec_kdo() As Byte
       Case K_logn                                           ' LN
          Lstx = Rx
          Rx = Log(rx)
+      Case K_logx                                           ' Log10
+         Lstx = Rx
+         Rx = Log10(rx)
       Case K_ehochx                                         ' e hoch x
          Lstx = Rx
          Rx = Exp(rx)
+      Case K_10hochx                                         ' e hoch x
+         Lstx = Rx
+         Rx = 10.0 ^ rx
       Case K_clearx                                         ' Cx  - bekommt eine Spezialbehandlung direkt in der Tastenroutine
          If Z_inputflag = 0 Then                            ' Unmotiviertes Loeschen, vorher waren keine Zahleneingaben
             Lstx = Rx
@@ -2394,12 +2426,19 @@ Function Exec_kdo() As Byte
          ' Else
          '   Z_inputflag = 0                                 ' Enter und Lstx - Behandlung nur, wenn als Kommando ausserhalb der Zifferneingabe
          End If
-      Case K_xhochy                                         ' y hoch x
+      Case K_xhochy                                         ' x hoch y
          Lstx = Rx
          ' Rx = log(Rx)
          ' Rx = Rx * Ry
          ' Rx = exp(Rx)
-         Rx = Ry ^ Rx
+         Rx = Rx ^ Ry
+         Call Rolldown
+      Case K_yhochx                                         ' y hoch x
+         Lstx = Rx
+         ' Rx = log(Rx)
+         ' Rx = Rx * Ry
+         ' Rx = exp(Rx)
+         Rx = Ry ^Rx
          Call Rolldown
       Case K_chgxy                                          ' x <-> y
          Lstx = Rx
@@ -2521,8 +2560,18 @@ Function Exec_kdo() As Byte
            Call Write_prg_file(filename)
       Case K_sd_read                                        ' read from disk
            Call Read_prg_file(filename)
-      End Select
 
+      ' EEProm loeschen
+      Case K_clear_mem                                       ' Zahlenspeicher loeschen
+           For L_adr = 1 To K_num_mem
+              Ce_mem(L_adr) = 0.0
+              Fe_mem(L_adr) = 1                              ' Cache als veraendert merkieren
+           Next L_adr
+      Case K_clear_prg                                        ' Programmspeicher loeschen
+           For L_adr = 1 To K_num_prg
+              Ee_program(L_adr) = K_nop
+           Next L_adr
+      End Select
 
 No_execution:
     X_kommando = 0
@@ -2568,119 +2617,121 @@ End Sub Rolldown
 ' Die Kommandos zaehlen einfach hoch, "F" macht dann noch mal K_F_OFFSET drauf (in der Polling-Routine)
 ' ========================================================================
 Function Key2kdo(incode As Byte) As Byte
+
    Key2kdo = 0                                              ' Default, nokey
    Select Case Incode
 
      Case 1
-                Key2kdo = "8"                               ' 56
+            Key2kdo = "8"                                   ' 56
      Case 2
-                Key2kdo = K_durch                           ' "/"
+            Key2kdo = K_durch                               ' "/"
      Case 3
-                Key2kdo = "5"                               ' 53
+            Key2kdo = "5"                                   ' 53
      Case 4
-                Key2kdo = "2"                               ' 50
+            Key2kdo = "2"                                   ' 50
 
      Case 5
-                Key2kdo = K_point                           ' "."
+            Key2kdo = K_point                               ' "."
      Case 6
-                Key2kdo = "7"                               ' 55
+            Key2kdo = "7"                                   ' 55
      Case 7
-                Key2kdo = K_mal                             ' "*"
+            Key2kdo = K_mal                                 ' "*"
      Case 8
-                Key2kdo = "4"                               ' 52
+            Key2kdo = "4"                                   ' 52
 
      Case 9
-                Key2kdo = "1"                               ' 49
+            Key2kdo = "1"                                   ' 49
      Case 10
-                Key2kdo = "0"                               ' 48
+            Key2kdo = "0"                                   ' 48
      Case 11
-                Key2kdo = K_tangens                         ' "Tangens"
+            Key2kdo = K_minusx
      Case 12
-                Key2kdo = K_minus                           ' "-"
+            Key2kdo = K_minus                               ' "-"
 
      Case 13
-                Key2kdo = K_eex                             ' Eng-Eingabe
+            Key2kdo = K_eex                                 ' Eng-Eingabe
      Case 14
-                Key2kdo = K_enter                           ' "Enter"
+            Key2kdo = K_enter                               ' "Enter"
      Case 15
-                Key2kdo = K_enter                           ' "Enter"
+            Key2kdo = K_enter                               ' "Enter"
      Case 16
-                Key2kdo = K_cosinus                         ' "Cosinus"
+            Key2kdo = K_einsdrchx
 
      Case 17
-                Key2kdo = K_plus                            ' "+"
+            Key2kdo = K_plus                                ' "+"
      Case 18
-                Key2kdo = K_nop                             ' Noch frei
+            Key2kdo = K_tangens                             ' "Tangens"
      Case 19
-                Key2kdo = K_chgxy                           ' x <-> y
+            Key2kdo = K_clearx                              ' CX
      Case 20
-                Key2kdo = K_recall                          ' RCL
+            Key2kdo = K_recall                              ' RCL
 
      Case 21
-                Key2kdo = K_sinus                           ' "Sinus"
+            Key2kdo = K_yhochx
      Case 22
-                Key2kdo = "9"                               ' 57
+            Key2kdo = "9"                                   ' 57
      Case 23
-                Key2kdo = K_nop                             ' Noch frei
+            Key2kdo = K_cosinus                             ' "Cosinus"
      Case 24
-                Key2kdo = P_return                          ' RETURN
+            Key2kdo = K_chgxy                               ' x <-> y
 
      Case 25
-                Key2kdo = K_store                           ' STO
+            Key2kdo = K_store                               ' STO
      Case 26
-                Key2kdo = "6"                               ' 54
+            Key2kdo = "6"                                   ' 54
      Case 27
-                Key2kdo = K_xhochy                          ' x hoch y
+            Key2kdo = K_10hochx
      Case 28
-                Key2kdo = K_nop                             ' Noch frei
+            Key2kdo = K_sinus                               ' "Sinus"
 
      Case 29
-                Key2kdo = P_gosub                           ' GOSUB
+            Key2kdo = K_roll                                ' Rolldown
      Case 30
-                Key2kdo = K_index                           ' "Index"
+            Key2kdo = K_int
      Case 31
-                Key2kdo = "3"                               ' 51
+            Key2kdo = "3"                                   ' 51
      Case 32
-                Key2kdo = K_logn                            ' LN
+            Key2kdo = K_ehochx
 
      Case 33
-                Key2kdo = K_sd_read                         ' read from disk
+            Key2kdo = P_goto                                ' GOTO
      Case 34
-                Key2kdo = P_goto                            ' GOTO
+            Key2kdo = P_gosub                               ' GOSUB
      Case 35
-                Key2kdo = K_zweit                           ' "F" - Zweitbelegung der Tasten
+            Key2kdo = K_zweit                               ' "F" - Zweitbelegung der Tasten
      Case 36
-                Key2kdo = K_clearx                          ' CX
+            Key2kdo = K_index                               ' "Index"
 
      Case 37
-                Key2kdo = K_sqrt                            ' SQRT
+            Key2kdo = K_sqrt                                ' SQRT
      Case 38
-                Key2kdo = K_sd_write                        ' Save 2 disk
+            Key2kdo = P_vor                                 ' Im Programmspeicher einen Schritt vor
      Case 39
-                Key2kdo = P_start                           ' START / STOP
-   End Select
+            Key2kdo = P_start                               ' START / STOP
 
+   End Select
    ' im HEX-Darstellungsmodus bekommen die Sinus-tan und ln-sqrt eine andere Funktion,
    ' naemlich der Zifferneingabe fuer A-F
 
    If Ee_fixflag = S_disp_hex Then                          ' Wenn wir im Hex-modus sind, nur Integer
      Select Case Incode
        Case 37
-                Key2kdo = K_hex_a                           ' "A"
+            Key2kdo = K_hex_a                               ' "A"
        Case 32
-                Key2kdo = K_hex_b                           ' "B"
+            Key2kdo = K_hex_b                               ' "B"
        Case 27
-                Key2kdo = K_hex_c                           ' "C"
+            Key2kdo = K_hex_c                               ' "C"
        Case 21
-                Key2kdo = K_hex_d                           ' "D"
+            Key2kdo = K_hex_d                               ' "D"
        Case 16
-                Key2kdo = K_hex_e                           ' "E"
+            Key2kdo = K_hex_e                               ' "E"
        Case 11
-                Key2kdo = K_hex_f                           ' "F"
+            Key2kdo = K_hex_f                               ' "F"
      End Select
    End If
 
 End Function Key2kdo
+
 
 
 
@@ -2739,12 +2790,20 @@ Function Encode_kdo(byval Inputkey As Byte) As String
           Encode_kdo = "RETURN"
      Case K_logn
           Encode_kdo = "LN"
+     Case K_logx
+          Encode_kdo = "LOG"
      Case P_start
           Encode_kdo = "HALT"
      Case K_clearx
           Encode_kdo = "CX"
+     Case K_clear_mem
+          Encode_kdo = "C Reg"
+     Case K_clear_prg
+          Encode_kdo = "C Prg"
      Case K_xhochy
           Encode_kdo = "x^y"
+     Case K_yhochx
+          Encode_kdo = "y^x"
      Case K_chgxy
           Encode_kdo = "x<->y"
      Case K_stoplus
@@ -2773,6 +2832,8 @@ Function Encode_kdo(byval Inputkey As Byte) As String
           Encode_kdo = "Fix"
      Case K_roll
           Encode_kdo = "RDN"
+     Case K_rollup
+          Encode_kdo = "ROLLUP"
      Case K_quadr
           Encode_kdo = "SQR"
      Case P_ifbig
@@ -2795,6 +2856,8 @@ Function Encode_kdo(byval Inputkey As Byte) As String
           Encode_kdo = "Loop 9"
      Case K_ehochx
           Encode_kdo = "e^X"
+     Case K_10hochx
+          Encode_kdo = "10^X"
      Case P_auto
           Encode_kdo = "RUN"
      Case P_nop
