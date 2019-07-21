@@ -44,7 +44,8 @@
 ' 09.07.19  V  04.07 Leseroutine korrigiert (letzte Zeile), Behandlung von Syntaxfehlern beim Dateilesen
 ' 14.07.19  V  04.08 Eex-Funktion in der Eingabe
 ' 15.07.19  V  04.09 8x5 Tastenbelegung
-' 20.07.19  V  04.10 Voyager-Tastenbelegung und neue Funktionen (log10, 10^x, y^x ..)
+' 20.07.19  V  04.10 Voyager-Tastenbelegung und neue Funktionen (lon10, 10^x, y^x ..)
+' 21.07.19  V  04.11 Ein/Ausschalter, Kommentarzeilen in Programmdateien werden ueberlesen
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -57,6 +58,7 @@ $baud = 115200                                              ' Baudrate der UART:
 
 ' Echo Off
 
+
 $hwstack = 196                                              ' hardware stack (32)
 $swstack = 196                                              ' SW stack (10)
 $framesize = 256                                            ' frame space (40)
@@ -66,7 +68,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.10"                                   '
+Const K_version = "04.11"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -114,6 +116,15 @@ Config Dog_ds = Output
 Config Spi = Hard , Interrupt = Off , Data_order = Msb , Master = Yes , Polarity = High , Phase = 1 , Clockrate = 4 , Noss = 1
 
 Spiinit
+
+'-------------------------------------------------------------------------------------------
+' Initialisierung für Power Down Mode
+'-------------------------------------------------------------------------------------------
+Ddrd = 0xfb                                                 ' PD2 = INT0 = Eingang
+Portd = &B00000100                                          ' pull up an PD2 aktivieren
+Acsr = 0x80                                                 ' Analogcomparator ausschalten
+On Int0 Wake_up                                             ' bei INT0 aufwachen
+'-------------------------------------------------------------------------------------------
 
 Set Dog_cs
 Dog_miso = 1                                                'pull up on miso
@@ -187,6 +198,7 @@ Declare Sub Display_adress_input()
 Declare Sub Display_code()                                  ' Anzeige des Programmspeichers
 Declare Sub Display_code_line(byval Code_word As Word)      ' Umrechnen einer Codezeile zur ANzeige und anzeigen
 Declare Sub Display_status_line()                           ' Umrechnen einer Codezeile zur ANzeige und anzeigen
+Declare Sub Show_off()
 
 Declare Sub Kill_run()                                      ' Programm anhalten
 Declare Sub Display_runmode()                               ' Anzeige "run" in der Statuszeile bei Programmabarbeitung
@@ -240,6 +252,11 @@ Declare Sub Init_sd_fs()
 Declare Sub Write_prg_file(byval Prg_filename As String)
 Declare Sub Read_prg_file(byval Prg_filename As String)
 
+' Power-Up and Down Subroutinen
+
+Declare Sub Power_down()
+Declare Sub Wake_up()
+
 Const K_num_mem = 64                                        ' Anzahl der Zahlenspeicher
 Const K_num_prg = 255                                       ' Anzahl der Programmspeicher
 
@@ -267,6 +284,8 @@ Dim V_st(16) As Byte                                        ' Das Anzeige-Regist
 Dim W_st(16) As Byte                                        ' Das Anzeige-Register fuer die dritte Zeile
 
 Dim S_st(48) As Byte                                        ' Eine Kopie des Anzeige-Registers
+Dim Pd_st(16) As Byte                                       ' Eine Temporaere Kopie des AW_st nzeige-Registers
+
 Dim I_pt As Byte                                            ' Eingabe-Pointer
 
 ' 4. Arbeitsvariablen
@@ -571,7 +590,10 @@ Call Interpr_xy()
 Call Anzeigen
 
 Do                                                          'Hauptschleife
-      Waitms 1000
+      Waitms 500                                            ' verkuerzt, damit man den Aus-Knopf nicht so lange druecken muss
+      If Pind.2 = 0 Then                                    ' ON/OFF betätigt
+         Call Power_down()                                  ' Power Down' bei Betätigung von ON/OFF wird Power_Down ausgeführt
+      End If
 
 #if Block_communication = 1
       'get a char from the UART
@@ -2158,6 +2180,72 @@ End Sub Anzeigen
 
 
 ' ========================================================================
+' Power-Up and Down Subroutinen
+' ========================================================================
+' --------------------------------------------------------
+' schaltet den Taschenrechner aus
+' --------------------------------------------------------
+Sub Power_down()
+   Local Spidata As Byte
+
+   Call Show_off
+   Waitms 1000                                              ' 1/2 Sekunde warten
+   Dog_ds = 0                                               ' RS=0
+   Spidata = &H08 : Call Sendspi2display(spidata)           ' Display off
+   Waitms 100                                               ' 1/2 Sekunde warten
+   Reset Portb.2                                            ' Backlight OFF
+   Enable Int0 , Low                                        ' Int0 freigeben, der naechste Tastendruck löst das Aufwecken aus
+   Config Powermode = Powerdown
+  ' Return
+End Sub Power_down
+
+' --------------------------------------------------------
+' Hinweis in der Statuszeile der Anzeige unter Rettung des aktuellen Inhaltes
+' Seiteneffekt, kann den Rettespeicher kaputt machen,
+' braucht also deshalb. einen eigenen Speicher
+' --------------------------------------------------------
+Sub Show_off()
+   Local P_n As Byte
+
+   For P_n = 1 To 16
+      Pd_st(p_n) = T_st(p_n)
+      T_st(p_n) = D_space
+   Next P_n
+
+   T_st(14) = "P"
+   T_st(13) = "o"
+   T_st(12) = "w"
+   T_st(11) = "e"
+   T_st(10) = "r"
+   T_st(8) = "O"
+   T_st(7) = "F"
+   T_st(6) = "F"
+
+   Call Anzeigen
+   For P_n = 1 To 16
+      T_st(p_n) = Pd_st(p_n)
+   Next P_n
+
+End Sub Show_off
+
+' --------------------------------------------------------
+' hier wird der Taschenrechner wieder eingeschaltet
+' --------------------------------------------------------
+Sub Wake_up()                                               ' bei Int 0
+   Local Spidata As Byte
+
+   Disable Int0                                             ' Int0 abschalten, damit der naechste Tastendruck dann wieder einschaltet
+   Set Portb.2                                              ' Backlight ON
+   Waitms 100                                               ' 1/2 Sekunde warten
+   Dog_ds = 0                                               ' RS=0
+   Spidata = &H0C : Call Sendspi2display(spidata)           ' Display off
+
+   Call Anzeigen
+
+End Sub Wake_up
+
+
+' ========================================================================
 ' Initialisierung Der Anzeige Im 3 -zeilig Helligkeit , Modus
 ' ========================================================================
 Sub Init_st7036()                                           ' contr 0...3
@@ -2415,9 +2503,9 @@ Function Exec_kdo() As Byte
       Case K_ehochx                                         ' e hoch x
          Lstx = Rx
          Rx = Exp(rx)
-      Case K_10hochx                                         ' e hoch x
+      Case K_10hochx                                        ' e hoch x
          Lstx = Rx
-         Rx = 10.0 ^ rx
+         Rx = 10.0 ^ Rx
       Case K_clearx                                         ' Cx  - bekommt eine Spezialbehandlung direkt in der Tastenroutine
          If Z_inputflag = 0 Then                            ' Unmotiviertes Loeschen, vorher waren keine Zahleneingaben
             Lstx = Rx
@@ -2438,7 +2526,7 @@ Function Exec_kdo() As Byte
          ' Rx = log(Rx)
          ' Rx = Rx * Ry
          ' Rx = exp(Rx)
-         Rx = Ry ^Rx
+         Rx = Ry ^ Rx
          Call Rolldown
       Case K_chgxy                                          ' x <-> y
          Lstx = Rx
@@ -2562,14 +2650,14 @@ Function Exec_kdo() As Byte
            Call Read_prg_file(filename)
 
       ' EEProm loeschen
-      Case K_clear_mem                                       ' Zahlenspeicher loeschen
+      Case K_clear_mem                                      ' Zahlenspeicher loeschen
            For L_adr = 1 To K_num_mem
-              Ce_mem(L_adr) = 0.0
-              Fe_mem(L_adr) = 1                              ' Cache als veraendert merkieren
+              Ce_mem(l_adr) = 0.0
+              Fe_mem(l_adr) = 1                             ' Cache als veraendert merkieren
            Next L_adr
-      Case K_clear_prg                                        ' Programmspeicher loeschen
+      Case K_clear_prg                                      ' Programmspeicher loeschen
            For L_adr = 1 To K_num_prg
-              Ee_program(L_adr) = K_nop
+              Ee_program(l_adr) = K_nop
            Next L_adr
       End Select
 
@@ -2731,7 +2819,6 @@ Function Key2kdo(incode As Byte) As Byte
    End If
 
 End Function Key2kdo
-
 
 
 
@@ -3099,6 +3186,11 @@ Sub Read_prg_file(byval Prg_filename As String)
 
         Call Roll_anzeige()
 
+        ' Kommentarzeilen haben ein # in der ersten Position
+        C_code = Charpos(code_line , "#")
+
+        If C_code = 1 Then Goto Weiter_lesen                ' Kommentarzeilen ueberlesen
+
         For Qpos = 1 To 16
            Wpos = 17 - Qpos
            Wrkchar = Mid(code_line , Qpos , 1)
@@ -3139,6 +3231,8 @@ Sub Read_prg_file(byval Prg_filename As String)
         Wzch = C_code * 256
         Wzch = Wzch + C_opadr
         Ee_program(p_pc) = Wzch                             ' von Buffer nach EEPROM umkopieren
+
+Weiter_lesen:
 
         Call Anzeigen()
 
