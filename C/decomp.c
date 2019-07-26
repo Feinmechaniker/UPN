@@ -57,6 +57,7 @@ char bas_code;
    return (needs_mem_adress(bas_code) + needs_prog_adress(bas_code) + needs_param(bas_code));
 }
 
+
 // STO und RCL sind Speicherbefehle und brauchen eine Adresse 0..31
 int needs_mem_adress(char code) {
  if (code ==  7 || code == 8 || code == 18 || code == 19 || code == 20 || code == 21) return 1;
@@ -65,17 +66,30 @@ int needs_mem_adress(char code) {
 
 // FIX und GRD brauchen einen Parameter
 int needs_param(char code) {
- if (code ==  69 || code == 112) return 1;
+ // Bei boris6 sind da noch befehle dazugekommen (SFILE ...) 
+ if (statflag_boris4_mode == 6) {
+   if (code == 67 || code == 68 || code == 71 || code == 72) return 1;
+ } else {
+   if (code ==  69 || code == 112) return 1;
+ }
  return 0;
 }
 
 // GOTO, GOSUB, IF*i, END sind steuerbefehle und brauchen eine Adresse von 0.255
 int needs_prog_adress(char code) {
- if (code == 10 || code == 11 || code == 74 || code == 75 || code == 76 || code == 126) return 1;
- // boris5 hat weitere Befehle
- if (!statflag_boris4_mode) {
-    if (code == 116 || code == 117 || code == 118 || code == 119 || code == 120 || code == 121) return 1;
+ if (statflag_boris4_mode == 4) {
+    if (code == 10 || code == 11 || code == 74 || code == 75 || code == 76 || code == 126) return 1;
  }
+ // boris5 hat weitere Befehle
+ if (statflag_boris4_mode == 5) {
+    if (code == 10 || code == 11 || code == 74 || code == 75 || code == 76 || code == 126 \
+       || code == 116 || code == 117 || code == 118 || code == 119 || code == 120 || code == 121) return 1;
+ }
+ // boris6 hat weitere Befehle
+ if (statflag_boris4_mode == 6) {
+    if (code ==  10 || code ==  11 || code == 23 || code == 113 || code == 114 || code == 115 || code == 116 \
+       || code == 117 || code == 118 || code == 119 || code == 120 || code == 121) return 1;
+    }
  return 0;
 }
 
@@ -100,15 +114,24 @@ char * get_cmd_str(unsigned code) {
   if (code == -1) {
      if (statflag_verbose_mode)
         fprintf(stderr, "mapping EOF %d to END\n", code);
-     code = 126;
+     if (statflag_boris4_mode == 6) {
+           code = 23;
+     } else {
+           code = 126;
+     }
   }
 
-  if (statflag_boris4_mode) {
+  if (statflag_boris4_mode == 4) {
      if (code > 127) return (char *) NULL;
      if (code < 128 && strlen(kdo_4_codes[code]) > 0) return kdo_4_codes[code];
-  } else {
+  }
+  if (statflag_boris4_mode == 5) {
      if (code > 255) return (char *) NULL;
      if (code < 256 && strlen(kdo_5_codes[code]) > 0) return kdo_5_codes[code];
+  }
+  if (statflag_boris4_mode == 6) {
+     if (code > 255) return (char *) NULL;
+     if (code < 256 && strlen(kdo_6_codes[code]) > 0) return kdo_6_codes[code];
   }
   fprintf(stderr, "ERROR: code %d kann nicht uebersetzt werden\n", code);
   return (char *) NULL;
@@ -117,13 +140,33 @@ char * get_cmd_str(unsigned code) {
 // Ausgabeformatierung
 static char * prepare_output_line(char *marke, char *kdo, int adresse, int ch) {
    static char codeline[24];
+   static char codecpy[24];
    char *cp;
+   char *ccp;
 
    cp = codeline;
    *cp = '\0';
    if ( needs_adress(ch)) {
        // printf ("%s %s %d\t; %02x %02x\n", marke, kdo, adresse, ch, adresse);
-       sprintf (codeline, "%s %s %d", marke, kdo, adresse);
+       // boris6 schreibt einen Doppelpunkt vor die Adresse
+       // 120 Loop 8 : 120
+       if (statflag_boris4_mode == 6) {
+          sprintf (codecpy, "%s %s", marke, kdo);
+          ccp=codecpy+strlen(codecpy);
+          while(ccp<codecpy+10) {
+             *ccp = ' ';
+             ccp++;
+          }
+          *ccp = '\0';
+          // die Index-Kommandos sind oberhalb der 127
+          if (ch > 127) {
+             sprintf (codeline, "%s Ix%2d", codecpy, adresse);
+          } else {
+             sprintf (codeline, "%s :%3d", codecpy, adresse);
+          }
+       } else {
+          sprintf (codeline, "%s %s %d", marke, kdo, adresse);
+       }
    } else {
        // printf ("%s %s\t; %02x %02x\n", marke, kdo, ch, 0);
        sprintf (codeline, "%s %s", marke, kdo);
@@ -144,11 +187,13 @@ static char * prepare_output_line(char *marke, char *kdo, int adresse, int ch) {
 
 
 void usage(char * Program) {
-   fprintf(stderr, "%s - Ein Kommandozeilen Disassembler fuer boris4/5 - Programme\n\n",Program);
-   fprintf(stderr, "Bitteschoen: %s [-lxv] [-o outfile] Eingabedatei\n",Program);
+   fprintf(stderr, "%s - Ein Kommandozeilen Disassembler fuer boris4/5/6 - Programme\n\n",Program);
+   fprintf(stderr, "Bitteschoen: %s [-lxv] [-4|-5|-6] [-o outfile] Eingabedatei\n",Program);
    fprintf(stderr, "     -l          Alle Zeilennummern ausgeben (default: nur als Marken benutzte)\n");
    fprintf(stderr, "     -v          geschwaetziger modus\n");
-   fprintf(stderr, "     -4          boris4 - modus (default: boris5)\n");
+   fprintf(stderr, "     -4          boris4 - modus \n");
+   fprintf(stderr, "     -5          boris5 - modus \n");
+   fprintf(stderr, "     -6          boris6 (Voyager) - modus (default)\n");
    fprintf(stderr, "     -x          Hexcode als Kommentar hinzufuegen\n");
    fprintf(stderr, "     -o Datei    Ausgabe in eine Datei (default: stdout)\n");
 }
@@ -158,6 +203,7 @@ int main(int argc, char * argv[]) {
      FILE* file_out;
      int c, i, a;
      int ch;
+     int end_flag;
 
      int adresse;
      char * kdo;
@@ -178,11 +224,12 @@ int main(int argc, char * argv[]) {
      statflag_file_output = 0;
      statflag_line_output = 0;
      statflag_verbose_mode = 0;
-     statflag_boris4_mode = 0;
+     statflag_boris4_mode = 6;
      
      opterr = 0;
+     end_flag = 0;
 
-     while ((c = getopt (argc, argv, (const char *) "lxhv4o")) != -1) {
+     while ((c = getopt (argc, argv, (const char *) "lxhv456o")) != -1) {
         switch (c)
           {
           case 'x':
@@ -192,7 +239,13 @@ int main(int argc, char * argv[]) {
             statflag_verbose_mode = 1;
             break;
           case '4':
-            statflag_boris4_mode = 1;
+            statflag_boris4_mode = 4;
+            break;
+          case '5':
+            statflag_boris4_mode = 5;
+            break;
+          case '6':
+            statflag_boris4_mode = 6;
             break;
           case 'o':
             statflag_file_output = 1;
@@ -215,10 +268,14 @@ int main(int argc, char * argv[]) {
 
       if (statflag_verbose_mode) {
          fprintf (stderr, "statflag_hex_output = %d, statflag_file_output = %d\n", statflag_hex_output, statflag_file_output);
-         if (statflag_boris4_mode) {
+         if (statflag_boris4_mode == 4) {
             fprintf (stderr, "Boris-4 modus\n");
-         } else {
+         }
+         if (statflag_boris4_mode == 5) {
             fprintf (stderr, "Boris-5 modus\n");
+         }
+         if (statflag_boris4_mode == 6) {
+            fprintf (stderr, "Boris-6 (Voyager) modus\n");
          }
          fprintf (stderr, "optind = %d, argc = %d\n", optind, argc);
 
@@ -316,19 +373,32 @@ int main(int argc, char * argv[]) {
          if (statflag_verbose_mode)
                fprintf (stderr, "\n");
 
-         while (ch != EOF) {
+         while (ch != EOF && end_flag == 0) {
             ch = fgetc(file_in);
             adresse = fgetc(file_in); 
-            kdo =  get_cmd_str((unsigned) ch);
+            if (statflag_boris4_mode == 6 && ch > 127) {
+               kdo =  get_cmd_str((unsigned) ch-128);
+            } else {
+               kdo =  get_cmd_str((unsigned) ch);
+            }
 
-            // if (statflag_verbose_mode)
-            //     fprintf (stderr, "translated code %d to kdo >%s<\n", ch, kdo);
+            if (statflag_verbose_mode)
+                 fprintf (stderr, "translated code %d to kdo >%s<\n", ch, kdo);
+
+            if (statflag_boris4_mode == 6 && strcmp(kdo, "END") == 0) {
+               end_flag = 1;
+            }
 
             if (needs_mem_adress(ch)) used_mem[adresse] = 1;
             prep_marke(marke, used_prog[a], a);                
-            if (ch != EOF && adresse != EOF && kdo != NULL) {
+            if (((ch != EOF && adresse != EOF)  || end_flag == 1) && kdo != NULL) {
                cp =  prepare_output_line(marke, kdo, adresse, ch);
-               fprintf(file_out, "%s\n", cp);
+               // Bei Boris6 haben wir an der ersten Position ein Leerzeichen
+               if (statflag_boris4_mode == 6) {
+                  fprintf(file_out, " %s\n", cp);
+               } else {
+                  fprintf(file_out, " %s\n", cp);
+               }
                a++; 
                if (statflag_verbose_mode)
                   fprintf (stderr, ".");
