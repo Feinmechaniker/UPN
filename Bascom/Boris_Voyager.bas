@@ -44,8 +44,9 @@
 ' 09.07.19  V  04.07 Leseroutine korrigiert (letzte Zeile), Behandlung von Syntaxfehlern beim Dateilesen
 ' 14.07.19  V  04.08 Eex-Funktion in der Eingabe
 ' 15.07.19  V  04.09 8x5 Tastenbelegung
-' 20.07.19  V  04.10 Voyager-Tastenbelegung und neue Funktionen (lon10, 10^x, y^x ..)
+' 20.07.19  V  04.10 Voyager-Tastenbelegung und neue Funktionen (log10, 10^x, y^x ..)
 ' 21.07.19  V  04.11 Ein/Ausschalter, Kommentarzeilen in Programmdateien werden ueberlesen
+' 26.07.19  V  04.12 Mnemonik fuer CReg und CProg geaendert
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -68,14 +69,14 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.11"                                   '
+Const K_version = "04.12"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
 ' Const Hp29c_comp = 0 ' Rt wird mit "0" initialisiert
 
 ' Compile-Switch ob das Display mit 3.3V (0) oder 5V (1) betrieben wird
-Const Dog_5v_comp = 1
+Const Dog_5v_comp = 0
 
 
 ' Mit dem folgenden Compile-Switch werden die Blockladefunktionen / Remotestart enabled.
@@ -2822,6 +2823,7 @@ End Function Key2kdo
 
 
 
+
 ' ========================================================================
 ' Umwandeln eines symbolischen Kommandos in eine Zeichenkette
 ' ========================================================================
@@ -2884,9 +2886,9 @@ Function Encode_kdo(byval Inputkey As Byte) As String
      Case K_clearx
           Encode_kdo = "CX"
      Case K_clear_mem
-          Encode_kdo = "C Reg"
+          Encode_kdo = "CReg"
      Case K_clear_prg
-          Encode_kdo = "C Prg"
+          Encode_kdo = "CPrg"
      Case K_xhochy
           Encode_kdo = "x^y"
      Case K_yhochx
