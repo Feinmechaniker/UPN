@@ -105,13 +105,23 @@ char bas_code;
    else
       bas_code = code;
 
-   if (statflag_boris4_mode) {
+   if (statflag_boris4_mode == 4) {
        if (bas_code ==  7 || bas_code == 8 || bas_code == 10 || bas_code == 11 || bas_code == 18 || bas_code == 19 || bas_code == 20 \
                       || bas_code == 21 || bas_code == 69 || bas_code == 74 || bas_code == 75 || bas_code == 76 || bas_code == 112 || bas_code == 126) return 1;
-   } else {
+   } 
+
+   if (statflag_boris4_mode == 5) {
        if (bas_code == 7 || bas_code == 8 || bas_code == 10 || bas_code == 11 || bas_code == 18 || bas_code == 19 || bas_code == 20 \
                       || bas_code == 21 || bas_code == 69 || bas_code == 74 || bas_code == 75 || bas_code == 76 || bas_code == 112 || bas_code == 116 \
                       || bas_code == 117 || bas_code == 118 || bas_code == 119 || bas_code == 120 || bas_code == 121 || bas_code == 126) return 1;
+   }
+
+   if (statflag_boris4_mode == 6) {
+       if (bas_code ==   7 || bas_code ==   8 || bas_code ==  10 || bas_code ==  11 || bas_code ==  18 \
+              || bas_code ==  19 || bas_code ==  20 || bas_code ==  21 || bas_code ==  67 || bas_code ==  68 \
+              || bas_code ==  71 || bas_code ==  72 || bas_code == 113 || bas_code == 114 || bas_code == 115 \
+              || bas_code == 116 || bas_code == 117 || bas_code == 118 || bas_code == 119 || bas_code == 120 \
+              || bas_code == 121 ) return 1;
    }
    return 0;
 }
@@ -126,6 +136,12 @@ unsigned short get_cmd_cde(char * code) {
   int i;
   char * last_space;
   char wrk_kdo[256];
+  char cmp_kdo[256];
+  char *cp;
+  char *ccp;
+
+  if (statflag_verbose_mode)
+     fprintf (stderr, "get_cmd_cde = >%s<\n", code);
 
   strcpy(wrk_kdo, code);
 
@@ -139,13 +155,42 @@ unsigned short get_cmd_cde(char * code) {
     }
   }
 
-  if (statflag_boris4_mode) {
+  if (statflag_verbose_mode)
+     fprintf (stderr, "get_cmd_cde wrk_kdo = >%s<\n", wrk_kdo);
+
+  if (last_space != NULL) {
+     // trimmen
+    while (isWspace(*last_space) && last_space > wrk_kdo) {
+       *last_space = '\0';
+       last_space--;
+    }
+  }
+
+  if (statflag_verbose_mode)
+     fprintf (stderr, "get_cmd_cde trim = >%s<\n", wrk_kdo);
+
+  if (statflag_boris4_mode == 4) {
      for(i=0; i<128; i++) {
         if (!strcmp(wrk_kdo, kdo_4_codes[i])) return i;
      }
-  } else {
+  } 
+
+
+  if (statflag_boris4_mode == 5) {
      for(i=0; i<256; i++) {
         if (!strcmp(wrk_kdo, kdo_5_codes[i])) return i;
+     }
+  }
+
+  if (statflag_boris4_mode == 6) {
+     for(i=0; i<256; i++) {
+        // toupper
+        for (cp = kdo_6_codes[i], ccp=cmp_kdo; *cp != '\0' && *cp != ';'; cp++, ccp++) {
+           *ccp = toupper(*cp);
+        }
+        *ccp = '\0';
+
+        if (!strcmp(wrk_kdo, cmp_kdo)) return i;
      }
   }
 
@@ -160,6 +205,7 @@ unsigned short get_cmd_cde(char * code) {
 
 void clean_code_line(char *line) {
    char * cp;
+   char * ccp;
 
    // toupper
    for (cp = line; *cp != '\0' && *cp != ';'; cp++) {
@@ -175,16 +221,35 @@ void clean_code_line(char *line) {
       *cp = '\0';
       cp--;
    }
-
+   if (statflag_boris4_mode == 6) {
+       // Boris6 hat vorn mglw ein Leerzeichen, das kann weg!
+       cp = line;
+       if (isWspace (*cp)) {
+          ccp = cp+1;
+          while (*ccp != '\0') {
+            *cp = *ccp;
+            cp++; ccp++;
+          }
+          *cp = '\0'; 
+       }
+       // Boris6 hat gelegentlich ein : vor der Adresse, das loeschen wir
+       cp = line;
+       while (*cp != '\0') {
+          if (*cp == ':') *cp = ' ';
+          cp++; 
+       }
+   }
 }
 
 
 void usage(char * Program) {
-   fprintf(stderr, "%s - Ein Kommandozeilen Assembler fuer boris4/5 - Programme\n\n",Program);
-   fprintf(stderr, "Bitteschoen: %s [-v] [-n] [-4] [-s startadresse] [-o outfile] Eingabedatei\n",Program);
+   fprintf(stderr, "%s - Ein Kommandozeilen Assembler fuer boris4/5/6 - Programme\n\n",Program);
+   fprintf(stderr, "Bitteschoen: %s [-v] [-n] [-4|-5|-6] [-s startadresse] [-o outfile] Eingabedatei\n",Program);
    fprintf(stderr, "     -n          Datei mit NOP auffuellen\n");
    fprintf(stderr, "     -v          geschwaetziger modus\n");
-   fprintf(stderr, "     -4          boris4 - modus (default: boris5)\n");
+   fprintf(stderr, "     -4          boris4 - modus\n");
+   fprintf(stderr, "     -5          boris5 - modus\n");
+   fprintf(stderr, "     -6          boris6 (voyager) - modus (default)\n");
    fprintf(stderr, "     -s Adresse  Startadresse des Programms (default: 0)\n");
    fprintf(stderr, "     -o Datei    Ausgabe in eine Datei (default: stdout)\n");
 }
@@ -217,20 +282,26 @@ int main(int argc, char * argv[]) {
      statflag_file_output = 0;
      statflag_verbose_mode = 0;
      statflag_fill_nop_mode = 0;
-     statflag_boris4_mode = 0;
+     statflag_boris4_mode = 6;
      startadr_str[0] = '\0';
      startadr = 0;
 
      s = line;
 
-     while ((c = getopt (argc, argv, (const char *) "nh4vo:s:")) != -1) {
+     while ((c = getopt (argc, argv, (const char *) "nh456vo:s:")) != -1) {
         switch (c)
           {
           case 'v':
             statflag_verbose_mode = 1;
             break;
           case '4':
-            statflag_boris4_mode = 1;
+            statflag_boris4_mode = 4;
+            break;
+          case '5':
+            statflag_boris4_mode = 5;
+            break;
+          case '6':
+            statflag_boris4_mode = 6;
             break;
           case 'n':
             statflag_fill_nop_mode = 1;
@@ -281,10 +352,16 @@ int main(int argc, char * argv[]) {
       if (statflag_verbose_mode) {
          fprintf (stderr, "statflag_file_output = %d\n", statflag_file_output);
 
-         if (statflag_boris4_mode) {
+         if (statflag_boris4_mode == 4) {
             fprintf (stderr, "Boris-4 modus\n");
-         } else {
+         }
+
+         if (statflag_boris4_mode == 5) {
             fprintf (stderr, "Boris-5 modus\n");
+         }
+
+         if (statflag_boris4_mode == 6) {
+            fprintf (stderr, "Boris-6 (Voyager) modus\n");
          }
 
          fprintf(stderr, "Files: Input: >%s< Output: >%s<\n", infile, outfile);
@@ -295,7 +372,7 @@ int main(int argc, char * argv[]) {
          }
       }
 
-      if (statflag_boris4_mode) {
+      if (statflag_boris4_mode == 4) {
          max_prg = 100;
       } else {
          max_prg = 255;
@@ -331,68 +408,87 @@ int main(int argc, char * argv[]) {
          while (fgets(s, 255, file_in) != NULL) {
             if (!is_comment(line)) {
                clean_code_line(line);
-               if (isWspace (line[0])){
-                  // wir haben vorn keine Zeilennummer
-                  // i = sscanf(s, "%[^@]@%d", kdo, &adresse);
-                  zeile = 0;
-                  // vorspulen bis zum ersten "Nicht-Leerzeichen"
-                  cp = line;
-                  while (isWspace(*cp) && *cp != '\0') cp++;
-                  i = 1;
-               } else {
-                  // wir haben vorn eine Zeilennummer
-                  // i = sscanf(s, "%d%[^@]@%d", &zeile, kdo, &adresse);
-                  i = sscanf(s, "%d", &zeile);
-                  // Fehlerbehandlung bzw Markenverschiebung
-                  if (a != zeile) {
-                      fprintf(stderr, "WARNING: Adressabweichung in Zeile %d (%d)\n", a, zeile);
-                      if (a < zeile) {
-                         while (a < zeile) {
-                           fprintf(file_out, "%c%c", 0, 0);
-                           a++;
+               if (statflag_verbose_mode)
+                    fprintf (stderr, "cleaned code line >%s<\n", line);
+
+               if (strlen(line) > 0) {
+                  if (isWspace (line[0])){
+                     // wir haben vorn keine Zeilennummer
+                     // i = sscanf(s, "%[^@]@%d", kdo, &adresse);
+                     zeile = 0;
+                     // vorspulen bis zum ersten "Nicht-Leerzeichen"
+                     cp = line;
+                     while (isWspace(*cp) && *cp != '\0') cp++;
+                     i = 1;
+                  } else {
+                     // wir haben vorn eine Zeilennummer
+                     // i = sscanf(s, "%d%[^@]@%d", &zeile, kdo, &adresse);
+                     i = sscanf(s, "%d", &zeile);
+                     // Fehlerbehandlung bzw Markenverschiebung
+                     if (a != zeile) {
+                         fprintf(stderr, "WARNING: Adressabweichung in Zeile %d (%d)\n", a, zeile);
+                         if (a < zeile) {
+                            while (a < zeile) {
+                              fprintf(file_out, "%c%c", 0, 0);
+                              a++;
+                            }
+                         } else {
+                            fprintf(stderr, "ERROR: Adressabweichung in Zeile %d (%d) nicht korrigierbar\n", a, zeile);
                          }
-                      } else {
-                         fprintf(stderr, "ERROR: Adressabweichung in Zeile %d (%d) nicht korrigierbar\n", a, zeile);
-                      }
+                     }
+                     // vorspulen bis zum ersten "Nicht-Leerzeichen hinter der Zeilennummer"
+                     cp = line;
+                     while ((isWspace(*cp) == 0) && *cp != '\0') cp++;
+                     while (isWspace(*cp) && *cp != '\0') cp++;
                   }
-                  // vorspulen bis zum ersten "Nicht-Leerzeichen hinter der Zeilennummer"
-                  cp = line;
-                  while ((isWspace(*cp) == 0) && *cp != '\0') cp++;
-                  while (isWspace(*cp) && *cp != '\0') cp++;
-               }
-               
-               a++;
-               code = get_cmd_cde(cp);
-               // if (statflag_verbose_mode)
-               //    fprintf (stderr, "Command >%s< translated into code = %d\n", cp, code);
-
-               i++;
-
-               if (!needs_adress(code)) {
-                  i++;
-                  adresse = 0;
-               } else {
-                  // Adresse Lesen
-                  while (*cp != '\0') cp++;
-                  cp--;
-                  while ((isWspace(*cp) == 0)) cp--;
-                  i += sscanf(cp, "%d", &adresse);
-               }
-
-               if (i != 3) {
-                  fprintf(stderr, "ERROR: Parameterfehler >%s< \n", line);
-               } else {
-                  fprintf(file_out, "%c%c", code, (char) adresse);
+                  
                   if (statflag_verbose_mode)
-                     fprintf (stderr, ".");
+                       fprintf (stderr, "code line after adress >%s<\n", cp);
+                  a++;
+                  code = get_cmd_cde(cp);
+                  if (statflag_verbose_mode)
+                     fprintf (stderr, "Command >%s< translated into code = %d\n", cp, code);
+
+                  i++;
+
+                  if (!needs_adress(code)) {
+                     i++;
+                     adresse = 0;
+                  } else {
+                     // Adresse Lesen
+                     while (*cp != '\0') cp++;
+                     cp--;
+                     while ((isWspace(*cp) == 0)) cp--;
+                     // Boris6 hat eine enge formatierung des Ix
+                     if (statflag_boris4_mode == 6 && *(++cp) == 'I') {
+                        cp+=2;
+                        code += 128;
+                     }
+                     i += sscanf(cp, "%d", &adresse);
+                  }
+
+                  if (i != 3) {
+                     fprintf(stderr, "ERROR: Parameterfehler >%s< \n", line);
+                  } else {
+                     fprintf(file_out, "%c%c", code, (char) adresse);
+                     if (statflag_verbose_mode)
+                        fprintf (stderr, ".");
+                  }
                }
             }
          }
 
          // END Marke schreiben
-         if (a < max_prg && code != 126) {
+         if (statflag_boris4_mode == 6) {
+            if (a < max_prg && code != 23) {
+               fprintf(file_out, "%c%c", 23, a);
+               a++;
+            }
+         } else {
+            if (a < max_prg && code != 126) {
                fprintf(file_out, "%c%c", 126, a);
                a++;
+            }
          }
 
          if (statflag_verbose_mode)
