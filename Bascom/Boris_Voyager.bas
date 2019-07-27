@@ -47,6 +47,7 @@
 ' 20.07.19  V  04.10 Voyager-Tastenbelegung und neue Funktionen (log10, 10^x, y^x ..)
 ' 21.07.19  V  04.11 Ein/Ausschalter, Kommentarzeilen in Programmdateien werden ueberlesen
 ' 26.07.19  V  04.12 Mnemonik fuer CReg und CProg geaendert
+' 27.07.19  V  04.13 Kleine Fehler in den CD-Routinen (Fehlerbehandlung) behoben
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -69,7 +70,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.12"                                   '
+Const K_version = "04.13"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -2995,6 +2996,7 @@ End Function Encode_kdo
 
 ' ========================================================================
 ' SD-Card-Routinen fuerr SDHC-Card
+' SDHC-Card Initialisieren
 ' ========================================================================
 
 Sub Init_sdcard
@@ -3002,9 +3004,11 @@ Sub Init_sdcard
    Local Derrorcode As Byte
 
    ' 5 Versuche des Init der SD-Card
+   Sd_card_ok = 0
    For Tries = 1 To 5
       Derrorcode = Driveinit()
       Derrorcode = Derrorcode + Drivereset()
+      ' Print #1 , "Init Karte: Try " ; Tries ; " Derrorcode = " ; Derrorcode ; " Gbdriveerror = " ; Gbdriveerror
       If Derrorcode = 0 Then
          Btemp1 = 0
          Gbdriveerror = 0
@@ -3019,8 +3023,12 @@ Sub Init_sdcard
             Call Dos_error( "SD Init Error")                ' Fehler oder keine Karte
       End If
    Next Tries
+   ' Print #1 , "Return Karte: Try " ; Tries ; " Derrorcode = " ; Derrorcode ; " Gbdriveerror = " ; Gbdriveerror
 End Sub
 
+' ========================================================================
+' SDHC-Card Dateisystem Initialisieren
+' ========================================================================
 Sub Init_sd_fs
    Set Mmc_cs
    Reset Mmc_cs
@@ -3058,8 +3066,6 @@ Sub Init_sd_fs
          Case &HF8 : Call Dos_error( "SD drive write4" )
       End Select
    End If
-
-
 End Sub
 
 
@@ -3089,54 +3095,66 @@ Sub Write_prg_file(byval Prg_filename As String)
 
   Call Init_sdcard()                                        ' Bei jedem Aufruf neu mounten und initialisieren
 
-  Open Prg_filename For Output As #20
+  If Sd_card_ok = 1 Then
 
-  If Gbdoserror = 0 Then
+     Open Prg_filename For Output As #20
 
-     ' P_pc ist der Logische Befehlszaehler , Von 0-254
-     ' K_num_prg ist die Anzahl der Programmspeicher also 255
+     If Gbdoserror = 0 Then
 
-     S_p_pc = P_pc
+        ' P_pc ist der Logische Befehlszaehler , Von 0-254
+        ' K_num_prg ist die Anzahl der Programmspeicher also 255
 
-     ' Print #1 , "Write_prg_file " ; Prg_filename
+        S_p_pc = P_pc
 
-     For Indx = P_pc To K_num_prg
+        ' Print #1 , "Write_prg_file " ; Prg_filename
 
-        Incr P_pc                                           ' Logisch / physisch
+        For Indx = P_pc To K_num_prg
 
-        Code_word = Ee_program(p_pc)
-        Call Roll_anzeige()
-        Call Display_code_line(code_word)
-        Call Anzeigen()
+           Incr P_pc                                           ' Logisch / physisch
 
-        For Sc = 1 To 16
-           Nc = 17 - Sc
-           Zch = W_st(nc)
-           Insertchar Code_line , Sc , Zch
-        Next Sc
+           Code_word = Ee_program(p_pc)
+           Call Roll_anzeige()
+           Call Display_code_line(code_word)
+           Call Anzeigen()
 
-        Insertchar Code_line , 17 , 0
+           For Sc = 1 To 16
+              Nc = 17 - Sc
+              Zch = W_st(nc)
+              Insertchar Code_line , Sc , Zch
+           Next Sc
 
-        Print #20 , Code_line
+           Insertchar Code_line , 17 , 0
 
-        Waitms 200
+           Print #20 , Code_line
 
-        Zch = High(code_word)                               ' High-Teil - War das END?
+           If Gbdoserror <> 0 Then
+             Call Dos_error( "SD write error")              ' Fehler beim Schreiben
+             Wait 5
+             Goto Close_out_file
+           End If
 
-        If Zch = K_end Then Goto Close_out_file
+           Waitms 100
 
-     Next Indx
+           Zch = High(code_word)                               ' High-Teil - War das END?
 
-Close_out_file:
-     Close #20
+           If Zch = K_end Then Goto Close_out_file
 
-     ' Print #1 , "Closed " ; Prg_filename
+        Next Indx
 
-     P_pc = S_p_pc
-  Else
-     Call Dos_error( "Cannot Open File")                    ' Fehler beim Open
-     Wait 5
-  End If
+   Close_out_file:
+        Close #20
+
+        ' Print #1 , "Closed " ; Prg_filename
+
+        P_pc = S_p_pc
+     Else
+        Call Dos_error( "Cannot Open File")                    ' Fehler beim Open
+        Wait 5
+     End If
+   Else
+      Call Dos_error( "Card not ready")                     ' Fehler beim Init
+      Wait 5
+   End If
 
 End Sub Write_prg_file
 
@@ -3173,91 +3191,101 @@ Sub Read_prg_file(byval Prg_filename As String)
 
   Call Init_sdcard()                                        ' Bei jedem Aufruf neu mounten und initialisieren
 
-  Open Prg_filename For Input As #20
+  If Sd_card_ok = 1 Then
 
-  If Gbdoserror = 0 Then
+     Open Prg_filename For Input As #20
 
-     ' P_pc ist der Logische Befehlszaehler , Von 0-254
-     ' K_num_prg ist die Anzahl der Programmspeicher also 255
+     If Gbdoserror = 0 Then
 
-     S_p_pc = P_pc
+        ' P_pc ist der Logische Befehlszaehler , Von 0-254
+        ' K_num_prg ist die Anzahl der Programmspeicher also 255
 
-     Do
+        S_p_pc = P_pc
 
-        Lineinput #20 , Code_line
+        Do
 
-        Call Roll_anzeige()
+           Lineinput #20 , Code_line
 
-        ' Kommentarzeilen haben ein # in der ersten Position
-        C_code = Charpos(code_line , "#")
+           If Gbdoserror <> 0 Then
+             Call Dos_error( "SD read error")               ' Fehler beim Lesen
+             Wait 5
+             Goto Close_in_file
+           End If
 
-        If C_code = 1 Then Goto Weiter_lesen                ' Kommentarzeilen ueberlesen
+           Call Roll_anzeige()
 
-        For Qpos = 1 To 16
-           Wpos = 17 - Qpos
-           Wrkchar = Mid(code_line , Qpos , 1)
-           W_st(wpos) = Wrkchar
-        Next Qpos
+           ' Kommentarzeilen haben ein # in der ersten Position
+           C_code = Charpos(code_line , "#")
 
-        Code_adress = Mid(code_line , 2 , 3)
-        P_pc = Val(code_adress)
+           If C_code = 1 Then Goto Weiter_lesen                ' Kommentarzeilen ueberlesen
 
-        If P_pc > K_num_prg Then
-           Call Dos_error( "Prg. Overflow")
-           Goto Close_in_file
-        End If
+           For Qpos = 1 To 16
+              Wpos = 17 - Qpos
+              Wrkchar = Mid(code_line , Qpos , 1)
+              W_st(wpos) = Wrkchar
+           Next Qpos
 
-        Incr P_pc                                           ' physische Speicheradresse
+           Code_adress = Mid(code_line , 2 , 3)
+           P_pc = Val(code_adress)
 
-        Code_code = Mid(code_line , 5 , 7)
-        C_code = Decode_kdo(code_code)
+           If P_pc > K_num_prg Then
+              Call Dos_error( "Prg. Overflow")
+              Goto Close_in_file
+           End If
 
-        If C_code = 255 Then                                ' Error decoding kommando
-           Call Dos_error( "Syntax Error")
-           Wait 5
-           Decr P_pc                                        ' logische Speicheradresse
-           Goto Close_in_file
-        End If
+           Incr P_pc                                           ' physische Speicheradresse
 
-        Code_idx = Mid(code_line , 13 , 2)
-        Code_idxc = Compare(code_idx , Code_idxs , 2)
-        If Code_idxc = 0 Then
-           C_code = C_code + 128                            ' Index bedeutet 128 drauf
-           Code_opadr = Mid(code_line , 15 , 2)
-        Else
-           Code_opadr = Mid(code_line , 14 , 3)
-        End If
+           Code_code = Mid(code_line , 5 , 7)
+           C_code = Decode_kdo(code_code)
 
-        C_opadr = Val(code_opadr)                           ' Logische Speicheradresse
+           If C_code = 255 Then                                ' Error decoding kommando
+              Call Dos_error( "Syntax Error")
+              Wait 5
+              Decr P_pc                                        ' logische Speicheradresse
+              Goto Close_in_file
+           End If
 
-        Wzch = C_code * 256
-        Wzch = Wzch + C_opadr
-        Ee_program(p_pc) = Wzch                             ' von Buffer nach EEPROM umkopieren
+           Code_idx = Mid(code_line , 13 , 2)
+           Code_idxc = Compare(code_idx , Code_idxs , 2)
+           If Code_idxc = 0 Then
+              C_code = C_code + 128                            ' Index bedeutet 128 drauf
+              Code_opadr = Mid(code_line , 15 , 2)
+           Else
+              Code_opadr = Mid(code_line , 14 , 3)
+           End If
+
+           C_opadr = Val(code_opadr)                           ' Logische Speicheradresse
+
+           Wzch = C_code * 256
+           Wzch = Wzch + C_opadr
+           Ee_program(p_pc) = Wzch                             ' von Buffer nach EEPROM umkopieren
 
 Weiter_lesen:
 
-        Call Anzeigen()
+           Call Anzeigen()
 
-        Waitms 200
+           Waitms 100
 
-        If C_code = K_end Then Goto End_close_in_file
+           If C_code = K_end Then Goto End_close_in_file
 
-     Loop Until Eof(#20) <> 0
+        Loop Until Eof(#20) <> 0
 
 End_close_in_file:
 
-     P_pc = S_p_pc
+        P_pc = S_p_pc
 
 Close_in_file:
-     Close #20
+        Close #20
 
-     ' Print #1 , "Closed " ; Prg_filename
+     Else
+        Call Dos_error( "Cannot Open File")                    ' Fehler beim Open
+        Wait 5
+     End If
+   Else
+      Call Dos_error( "Card not ready")                     ' Fehler beim Init
+      Wait 5
+   End If
 
-
-  Else
-     Call Dos_error( "Cannot Open File")                    ' Fehler beim Open
-     Wait 5
-  End If
 
 End Sub Read_prg_file
 
