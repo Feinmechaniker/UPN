@@ -1,12 +1,34 @@
 UPN Taschenrechner BORIS
 ========================
 
+Eigentlich verwendet ja kein Mensch mehr einen Taschenrechner. 
+Aber da ein wahrer Bastler über die Frage "Wofür soll das gut sein?" erhaben  ist, warum nicht?
+
+Die erste Open-Source-inkarnation (boris4) s.a. rpn_boris_A328_v1.x sollte
+- UPN (Umgekehrte Polnische Notation) haben
+- leicht wissenschaftlich sein (Winkelfunktionen, Logarithmen, ...)
+- mit den altmodischen Siebensegmentanzeigen leuchten (LED)
+- Halbwegs klein sein
+- praktisch verwendbar sein.
+
+Als Prozessor kommen verschiedene ATMega Varianten zum Einsatz, programmiert mit BASCOM. 
+
+Wenig später entstand die programmierbare Variante von Boris rpn_boris_A328_v2.x.
+
+Später wuchsen dann die Wünsche schneller, 
+- eine USB-Schnittstelle, 
+- ein SD-Card-Interface und 
+- ein mehrzeiliges Display sollten es sein.
+Das war dann die Idee für den Boris-Voyager Boris_Voyager.bas.
+
 Das Projekt basiert auf dem Entwurf eines UPN Taschenrechners von 
 Gero.D (www.srswift.de). Dieser Taschenrechner wurde um eine 
 UART-Schnittstelle erweitert, um von einem PC externe Programme zu 
 laden oder Programme vom Taschenrechner zu sichern. Die Steuerung 
-erfolgt über den Boris-Commander (BC.exe). Kritik, Vorschläge
-und Erweiterungen können unter: 
+kann  über den Boris-Commander (BC.exe) oder verschiedene 
+Kommandozeilenprogramme (Compiler, Decompiler, Terminal) erfolgen. 
+
+Kritik, Vorschläge und Erweiterungen können unter: 
 https://www.mikrocontroller.net/topic/465853?goto=new#new 
 diskutiert werden.
 
