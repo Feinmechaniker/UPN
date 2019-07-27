@@ -4,7 +4,7 @@ UPN Taschenrechner BORIS
 Eigentlich verwendet ja kein Mensch mehr einen Taschenrechner. 
 Aber da ein wahrer Bastler über die Frage "Wofür soll das gut sein?" erhaben  ist, warum nicht?
 
-Die erste Open-Source-inkarnation (boris4) s.a. rpn_boris_A328_v1.x sollte
+Die erste Open-Source-inkarnation (boris4) s.a. (rpn_boris_A328_v1.x.bas) sollte
 - UPN (Umgekehrte Polnische Notation) haben
 - leicht wissenschaftlich sein (Winkelfunktionen, Logarithmen, ...)
 - mit den altmodischen Siebensegmentanzeigen leuchten (LED)
@@ -13,13 +13,13 @@ Die erste Open-Source-inkarnation (boris4) s.a. rpn_boris_A328_v1.x sollte
 
 Als Prozessor kommen verschiedene ATMega Varianten zum Einsatz, programmiert mit BASCOM. 
 
-Wenig später entstand die programmierbare Variante von Boris rpn_boris_A328_v2.x.
+Wenig später entstand die programmierbare Variante von Boris (rpn_boris_A328_v2.x.bas).
 
 Später wuchsen dann die Wünsche schneller, 
 - eine USB-Schnittstelle, 
 - ein SD-Card-Interface und 
 - ein mehrzeiliges Display sollten es sein.
-Das war dann die Idee für den Boris-Voyager Boris_Voyager.bas.
+Das war dann die Idee für den Boris-Voyager (Boris_Voyager.bas).
 
 Das Projekt basiert auf dem Entwurf eines UPN Taschenrechners von 
 Gero.D (www.srswift.de). Dieser Taschenrechner wurde um eine 
