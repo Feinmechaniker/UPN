@@ -48,6 +48,7 @@
 ' 21.07.19  V  04.11 Ein/Ausschalter, Kommentarzeilen in Programmdateien werden ueberlesen
 ' 26.07.19  V  04.12 Mnemonik fuer CReg und CProg geaendert
 ' 27.07.19  V  04.13 Kleine Fehler in den CD-Routinen (Fehlerbehandlung) behoben
+' 29.08.19  V  04.14 External RAM via I2C
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -70,7 +71,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.13"                                   '
+Const K_version = "04.14"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -79,6 +80,8 @@ Const Hp29c_comp = 1
 ' Compile-Switch ob das Display mit 3.3V (0) oder 5V (1) betrieben wird
 Const Dog_5v_comp = 0
 
+' Compile-Switch ob externer (I2C FRAM) oder interner (EEPROM)
+Const Use_i2c_ram_comp = 1
 
 ' Mit dem folgenden Compile-Switch werden die Blockladefunktionen / Remotestart enabled.
 ' Diese Funktionen sind nicht kompatibel zum BorisCommander (noch nicht?)
@@ -118,6 +121,27 @@ Config Dog_ds = Output
 Config Spi = Hard , Interrupt = Off , Data_order = Msb , Master = Yes , Polarity = High , Phase = 1 , Clockrate = 4 , Noss = 1
 
 Spiinit
+
+'-------------------------------------------------------------------------------------------
+' Initialisierung für die I2C Anbindung
+'-------------------------------------------------------------------------------------------
+#if Use_i2c_ram_comp = 1
+
+$lib "i2c_twi.lbx"                                          ' Nicht software emulated I2C sondern richtiges TWI
+
+Config Scl = Portc.0                                        '  SCL pin name
+Config Sda = Portc.1                                        '  SDA pin name
+
+I2cinit                                                     '
+
+Config Twi = 100000                                         ' I2C clock frequenz
+
+' Der Fram Wird Wie Ein Eeprom Seriell Angesprochen , Im Code Aendert Sich Nichts
+' External EEPROM Config
+$eepromsize = &H8000
+$lib "fm24c64_256.lib"
+
+#endif
 
 '-------------------------------------------------------------------------------------------
 ' Initialisierung für Power Down Mode
@@ -517,7 +541,7 @@ Store_kdo_active = 0
 Index_key = 0
 
 ' Die EEPROM-Inhalte koennten nach dem Brennen Unsinn enthalten
-' If Ee_fixflag <> 1 And Ee_fixflag <> 2 And Ee_fixflag <> 3 And Ee_fixflag <> 4 Then Ee_fixflag = 0
+If Ee_fixflag <> 1 And Ee_fixflag <> 2 And Ee_fixflag <> 3 And Ee_fixflag <> 4 Then Ee_fixflag = 0
 
 If Ee_program_valid <> 77 Then
   Ee_program_valid = 77
@@ -3110,7 +3134,7 @@ Sub Write_prg_file(byval Prg_filename As String)
 
         For Indx = P_pc To K_num_prg
 
-           Incr P_pc                                           ' Logisch / physisch
+           Incr P_pc                                        ' Logisch / physisch
 
            Code_word = Ee_program(p_pc)
            Call Roll_anzeige()
@@ -3135,7 +3159,7 @@ Sub Write_prg_file(byval Prg_filename As String)
 
            Waitms 100
 
-           Zch = High(code_word)                               ' High-Teil - War das END?
+           Zch = High(code_word)                            ' High-Teil - War das END?
 
            If Zch = K_end Then Goto Close_out_file
 
@@ -3148,7 +3172,7 @@ Sub Write_prg_file(byval Prg_filename As String)
 
         P_pc = S_p_pc
      Else
-        Call Dos_error( "Cannot Open File")                    ' Fehler beim Open
+        Call Dos_error( "Cannot Open File")                 ' Fehler beim Open
         Wait 5
      End If
    Else
@@ -3217,7 +3241,7 @@ Sub Read_prg_file(byval Prg_filename As String)
            ' Kommentarzeilen haben ein # in der ersten Position
            C_code = Charpos(code_line , "#")
 
-           If C_code = 1 Then Goto Weiter_lesen                ' Kommentarzeilen ueberlesen
+           If C_code = 1 Then Goto Weiter_lesen             ' Kommentarzeilen ueberlesen
 
            For Qpos = 1 To 16
               Wpos = 17 - Qpos
@@ -3233,32 +3257,32 @@ Sub Read_prg_file(byval Prg_filename As String)
               Goto Close_in_file
            End If
 
-           Incr P_pc                                           ' physische Speicheradresse
+           Incr P_pc                                        ' physische Speicheradresse
 
            Code_code = Mid(code_line , 5 , 7)
            C_code = Decode_kdo(code_code)
 
-           If C_code = 255 Then                                ' Error decoding kommando
+           If C_code = 255 Then                             ' Error decoding kommando
               Call Dos_error( "Syntax Error")
               Wait 5
-              Decr P_pc                                        ' logische Speicheradresse
+              Decr P_pc                                     ' logische Speicheradresse
               Goto Close_in_file
            End If
 
            Code_idx = Mid(code_line , 13 , 2)
            Code_idxc = Compare(code_idx , Code_idxs , 2)
            If Code_idxc = 0 Then
-              C_code = C_code + 128                            ' Index bedeutet 128 drauf
+              C_code = C_code + 128                         ' Index bedeutet 128 drauf
               Code_opadr = Mid(code_line , 15 , 2)
            Else
               Code_opadr = Mid(code_line , 14 , 3)
            End If
 
-           C_opadr = Val(code_opadr)                           ' Logische Speicheradresse
+           C_opadr = Val(code_opadr)                        ' Logische Speicheradresse
 
            Wzch = C_code * 256
            Wzch = Wzch + C_opadr
-           Ee_program(p_pc) = Wzch                             ' von Buffer nach EEPROM umkopieren
+           Ee_program(p_pc) = Wzch                          ' von Buffer nach EEPROM umkopieren
 
 Weiter_lesen:
 
@@ -3278,7 +3302,7 @@ Close_in_file:
         Close #20
 
      Else
-        Call Dos_error( "Cannot Open File")                    ' Fehler beim Open
+        Call Dos_error( "Cannot Open File")                 ' Fehler beim Open
         Wait 5
      End If
    Else
