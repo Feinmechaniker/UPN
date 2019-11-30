@@ -25,7 +25,7 @@
 '  V2 - Programmierbar
 '
 '  255 Programmschritte (00-254) im EEPROM (K_num_prg)
-'  32 Zahlenspeicher (0-31) im EEPROM  (K_num_mem)
+'  64 Zahlenspeicher (0-63) im EEPROM  (K_num_mem)
 '  16 Unterprogrammebenen mit GOSUB und RETURN
 '
 '  Updates: Updates: 3.3 Initialversion, basiert auf der V2.17
@@ -40,6 +40,9 @@
 '                    3.9 PAUSE Befehl (1s warten mit Anzeige an), geaenderte Statuszeile im Run-Modus
 '                    3.10 Index-Register zum Indirekten Zugriff auf Programm und Zahlenspeicher
 '                    3.11 Verschiedene Adressueberpruefungen
+'                    3.12 64 Zahlenspeicher, plain USB-Funktionen entfernt, Bugfixes
+'                    3.14 Kontrast optimiert fuer FSTN Display mit rotem Hintergrund,
+'                         RND verbessert, Hintergrundbeleuchtung im Run-Modus schaltet auch nach Timeout aus
 '
 '----------------------------------------------------------
 
@@ -50,6 +53,7 @@ $prog &HFF , &H62 , &HD9 , &HFF                             ' generated. Take ca
 $crystal = 1000000                                          ' Kein Quarz: 1MHz MHz
 $baud = 9600                                                ' Baudrate der UART: 9600 Baud
 
+' Osccal = 115                                                ' Kalibrierung des RC Oscillators, Dieser Wert muss noch hinexperimentiert werden
 Osccal = 84                                                 ' Kalibrierung des RC Oscillators, Dieser Wert muss noch hinexperimentiert werden
 Echo Off
 
@@ -62,25 +66,14 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "5.3.11"                                  '
+Const K_version = "5.3.14"                                  '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
 ' Const Hp29c_comp = 0 ' Rt wird mit "0" initialisiert
 
-' Compile-Switch ob das Display mit 3.3V (0) oder 5V (1) betrieben wird
-Const Dog_5v_comp = 0
-
-
-' Mit dem folgenden Compile-Switch werden die Blockladefunktionen / Remotestart enabled.
-' Diese Funktionen sind nicht kompatibel zum BorisCommander (noch nicht?)
-' Compile-Switch fuer eine Alternative Verwendung der Seriellen Schnittstelle (Blockweise, mit Protokoll)
-Const Block_communication = 1
-
-#if Block_communication = 1
 ' Wenn mit Interrupt, dann diese Config
 Config Serialin = Buffered , Size = 20
-#endif
 
 ' SPI-Interface zum DOGM163-Display.
 ' Wir verwenden die Hardware SPI, also die Pins der B-Ports
@@ -202,22 +195,16 @@ Declare Sub Update_cache()                                  ' Den Cache in den E
 ' -JG-
 ' UART Funktion
 Declare Sub Display_con()                                   ' "Con." Anzeige auf dem Display
-Declare Sub Display_load()                                  ' "LoAd" Anzeige auf dem Display
-Declare Sub Display_save()                                  ' "SavE" Anzeige auf dem Display
 Declare Sub Uart()                                          ' UART Funktion zum PC
-Declare Sub File_send()                                     ' Sendefunktio
-Declare Sub File_receive()                                  ' Empfangsfunktion
 
-#if Block_communication = 1
 Declare Sub Upload_block()                                  ' Protokolliges Empfangen von einem Datenblock mit Pruefsumme und Quittung
 Declare Sub Upload_file()                                   ' Protokolliges Empfangen von einer Datei
 Declare Sub Download_block(byval Schluss As Byte)           ' Protokolliges Empfangen von einem Datenblock mit Pruefsumme und Quittung
 Declare Sub Download_file()                                 ' Protokolliges Empfangen von einer Datei
 Declare Sub Download_headerblock(byval Size As Byte)
 Declare Sub Run_program()
-#endif
 
-Const K_num_mem = 32                                        ' Anzahl der Zahlenspeicher
+Const K_num_mem = 64                                        ' Anzahl der Zahlenspeicher
 Const K_num_prg = 255                                       ' Anzahl der Zahlenspeicher
 
 
@@ -289,7 +276,6 @@ Dim P_heartbeat As Byte                                     ' Flag Zur Schlangen
 Dim Kcode As String * 6
 Dim Wrkchar As String * 1
 
-#if Block_communication = 1
 Dim G_uart_error As Byte                                    ' Fehlerflag
 Dim F_blocknr As Byte                                       ' gelesene Blocknummer
 Dim F_nextblock As Byte                                     ' erwarteter naechster Block
@@ -298,7 +284,6 @@ Dim F_blockfolg As Byte                                     ' Es folgt ein weite
 Dim F_blockptr As Byte                                      ' Adresse der Programmspeicherzelle, die geschrieben wird
 
 Dim Zbuffer(16) As Byte                                     ' Lesepuffer der seriellen Schnittstelle
-#endif
 
 ' ========================================================================
 ' Kommandocodes
@@ -333,6 +318,8 @@ Const K_stoplus = 18                                        ' STO +
 Const K_stominus = 19                                       ' STO -
 Const K_stomal = 20                                         ' STO *
 Const K_stodurch = 21                                       ' STO /
+
+Const K_index = 22                                          ' 22  - Index- Kein wirkliches Kommando
 
 ' Winkelfunktionen ! ACHTUNG geaenderter Code
 Const K_sinus = 28                                          ' 28  - SINUS
@@ -386,8 +373,6 @@ Const K_asin = K_sinus + K_f_offset                         ' 92  - ARCUS SINUS
 Const K_acos = K_cosinus + K_f_offset                       ' 93  - ARCUS COSINUS
 Const K_atan = K_tangens + K_f_offset                       ' 94  - ARCUS TANGENS
 
-Const K_index = 60                                          ' 60  - Index
-
 Const K_zweit = 128                                         '
 
 ' Zeichencodes, sind in dieser Version weitgehend ASCII
@@ -395,10 +380,8 @@ Const D_char_dp = &H2E                                      ' "."
 Const D_space = &H20                                        ' Leerzeichen
 Const D_char_eq = &H3D                                      ' "="
 
-#if Block_communication = 1
 Const D_char_pfr = &H7E                                     ' Pfeil rechts
 Const D_char_pfl = &H7F                                     ' Pfeil links
-#endif
 
 Const Pi_k = 3.141592653589793238462643383279502
 
@@ -410,11 +393,9 @@ Const Pi_k = 3.141592653589793238462643383279502
 ' Initialisierung
 ' ========================================================================
 
-#if Block_communication = 1
 ' Die UART im Binaermodus
 ' Ist wahrscheinlich nicht erforderlich, aber der Klarheit wegen
 Open "Com1:9600,8,N,1" For Binary As #1
-#endif
 
 ' Initialisieren der Flags und Hilfsvariablen
 Lstkey = 0
@@ -502,13 +483,8 @@ Call Anzeigen
 Do                                                          'Hauptschleife
       Waitms 1000
 
-#if Block_communication = 1
       'get a char from the UART
       If Ischarwaiting() = 1 Then Call Uart                 ' Ist was auf der Seriellen Schnittstelle?
-#else
-      ' -JG-
-      If Ucsr0a.rxc0 = 1 Then Call Uart                     ' Zeichen auf der UART-Schnittstelle empfangen
-#endif
 
 Loop
 
@@ -592,7 +568,9 @@ Sub Polling()
       Call Interpr_xy()
       Call Anzeigen
 
-      Sleepflag = 0
+      ' Sleepflag = 0
+
+      Goto Runwtr                                           ' Wir nehmen die Zeitschleife fuer die Hintergrundbeleuchtung mit
 
   Else                                                      ' Interaktiv, kein laufendes Programm
 
@@ -772,17 +750,17 @@ Sub Polling()
     Call Update_cache()
 
     ' Wenn lange kein Knopf gedrueckt wurde, schalten wir die Anzeige auf "Sleep",
-    ' Alles aus, nur der allerletzte Dezimalpunkt ist an
     ' Der Timeout (etwa 1 Minute ist hier hartcodiert
+
+  Runwtr:
+
     If Inv_key = 0 Then                                     ' Wenn wir auf die Eingabe nach dem "F" warten, schlafen wir nicht
-       If Sleepflag = 1200 Then
-          Portb.0 = 0                                       ' Dosleep()
-       End If
 
        Incr Sleepflag
 
        If Sleepflag > 1200 Then
-           Sleepflag = 1201
+          Sleepflag = 1201
+          Portb.0 = 0                                       ' Hintergrundbeleuchtung aus
        End If
     End If
 
@@ -824,6 +802,8 @@ End Function Adress_check
 ' ========================================================================
 Sub Kill_run()
     P_goflag = 0
+    Portb.0 = 1                                             ' Dosleep()
+    Sleepflag = 0
     Call Interpr_xy()
     Call Anzeigen
 End Sub Kill_run
@@ -1173,6 +1153,9 @@ End Sub Display_adress_input
 Sub Display_error(byval Ec As Byte)
 
    Local N As Byte
+
+   Sleepflag = 0                                            ' Beleuchtungsuhr zuruecksetzen
+   Portb.0 = 1                                              ' Hintergrundbeleuchtung an
 
    Call Clear_t_st()
 
@@ -1886,6 +1869,9 @@ Sub Pause1s()
    P_goflag = 0
    P_programming = 0
 
+   Sleepflag = 0                                            ' Beleuchtungsuhr zuruecksetzen
+   Portb.0 = 1                                              ' Hintergrundbeleuchtung an
+
    Call Interpr_xy()
    T_st(16) = "P"
    T_st(15) = "1"
@@ -1974,19 +1960,12 @@ Sub Init_st7036()                                           ' contr 0...3
 
    Spidata = &H39 : Call Sendspi2display(spidata)           ' 8bit data, Code page 1
 
-#if Dog_5v_comp = 1
-   Spidata = &H1D : Call Sendspi2display(spidata)           ' 3 Zeilen Display
-   Spidata = &H50 : Call Sendspi2display(spidata)           ' Kontrast
-   Spidata = &H6C : Call Sendspi2display(spidata)           ' Spannungsfolger
-   Spidata = &H7C : Call Sendspi2display(spidata)           ' Kontrast
-#else
    Spidata = &H15 : Call Sendspi2display(spidata)           ' 3 Zeilen Display
-   Spidata = &H55 : Call Sendspi2display(spidata)           ' Kontrast
+   Spidata = &H55 : Call Sendspi2display(spidata)           ' Kontrast gruen
+   ' Spidata = &H54 : Call Sendspi2display(spidata)           ' Kontrast  rot
    Spidata = &H6E : Call Sendspi2display(spidata)           ' Spannungsfolger
-   Spidata = &H72 : Call Sendspi2display(spidata)           ' Kontrast
-#endif
-
-   ' Spidata = &H0F : Call Sendspi2display(spidata)           ' Display an, Cursor an, Blink
+   Spidata = &H72 : Call Sendspi2display(spidata)           ' Kontrast  gruen
+   ' Spidata = &H7C : Call Sendspi2display(spidata)           ' Kontrast  rot
 
    Spidata = &H38 : Call Sendspi2display(spidata)           ' Befehlstabelle 0
    Spidata = &H0C : Call Sendspi2display(spidata)           ' Display an, Cursor off, Blink off
@@ -2070,9 +2049,9 @@ Function Exec_kdo() As Byte
             ___rseed = Sleepflag
             Rnd_setup = 1
          End If
-         Intrnd = Rnd(10000)
+         Intrnd = Rnd(65535)
          Rx = Intrnd
-         Rx = Rx / 10000.0 :
+         Rx = Rx / 65535.0 :
       Case K_durch                                          ' "/"
          Lstx = Rx
          Rx = Ry / Rx
@@ -2301,7 +2280,14 @@ Function Exec_kdo() As Byte
             End If
       Case P_start                                          ' Start / Stop der Programmausfuehrung
            P_goflag = Not P_goflag
+           Sleepflag = 0                                    ' Beleuchtungsuhr zuruecksetzen
+           Portb.0 = 1                                      ' Hintergrundbeleuchtung an
+
            If P_goflag = 1 Then
+              If Rnd_setup = 0 Then
+                 ___rseed = Sleepflag
+                 Rnd_setup = 1
+              End If
               Pc = P_pc + 1
               L_code = Ee_program(pc)
               L_cmd = High(l_code)                          ' Trennung Code von Adresse
@@ -2702,14 +2688,11 @@ Local I1 As Byte
 End Sub Update_cache
 
 
-' -JG-
-
 ' ========================================================================
 ' Den String "Con" für "connect" in die Anzeige schreiben
 ' Conect
 ' ========================================================================
 Sub Display_con()
-#if Block_communication = 1
       Local I As Byte
       Call Clear_t_st()
       T_st(15) = "U"
@@ -2719,95 +2702,9 @@ Sub Display_con()
       T_st(10) = "-"
       T_st(9) = "-"
       T_st(8) = "-"
-#else
-      T_st(8) = "C"                                         ' C
-      T_st(7) = "o"                                         ' o
-      T_st(6) = "n"                                         ' n
-#endif
-        Call Anzeigen
+      Call Anzeigen
 End Sub Display_con
 
-
-' ========================================================================
-' Den String "Load" in die Anzeige schreiben
-' Conect
-' ========================================================================
-Sub Display_load()
-      Local I As Byte
-      Call Clear_t_st()
-      T_st(15) = "L"                                        ' L
-      T_st(14) = "o"                                        ' O
-      T_st(13) = "a"                                        ' A
-      T_st(12) = "d"                                        ' d
-      Call Anzeigen
-End Sub Display_load
-
-
-' ========================================================================
-' Den String "Save" in die Anzeige schreiben
-' Conect
-' ========================================================================
-Sub Display_save()
-      Local I As Byte
-      Call Clear_t_st()
-      T_st(15) = "S"                                        ' S
-      T_st(14) = "a"                                        ' A
-      T_st(13) = "v"                                        ' V
-      T_st(12) = "e"                                        ' E
-      Call Anzeigen
-End Sub Display_save
-
-' ========================================================================
-' PC empfängt Binärdaten (Programspeicher von Boris) - keine Fehlerbehandlung
-' ========================================================================
-Sub File_receive()
-   Local I As Byte
-   Local Zeichen As Word
-   Local Code As Byte
-
-   Call Display_save                                        ' Anzeige "Save"
-   For I = 1 To K_num_prg                                   ' kompletter Speicherinhalt (510 Byte)
-     Zeichen = Ee_program(i)                                ' Lese Word
-     Code = High(zeichen)                                   ' High-Teil senden
-     Printbin Code
-     Code = Low(zeichen)
-     Printbin Code                                          ' Low-Teil senden
-   Next
-End Sub File_receive
-
-
-' ========================================================================
-' PC sendet Binärdaten an Boris, abspeichern im Programspeicher - keine Fehlerbehandlung
-' ========================================================================
-Sub File_send()
-   Local I As Byte                                          ' Counter
-   Local Zeichen As Word                                    ' Doppelbyte im EEPROM
-   Local Code As Byte
-   Dim Buffer(25) As Word                                   ' Zwischenspeicher weil EEPROM schreiben zu langsam
-
-   Call Display_load                                        ' Anzeige "Load"
-   For I = 1 To 25                                          ' kompletter Speicherinhalt (512 Byte)
-    Do
-    Loop Until Ucsr0a.rxc0 = 1                              ' warten bis nächste Zeichen empfangen (immer High - Low)
-    Code = Udr                                              ' High-Teil
-    Zeichen = Code * 256
-    Do
-    Loop Until Ucsr0a.rxc0 = 1                              ' warten bis nächste Zeichen empfangen
-    Code = Udr                                              ' Low-Teil
-    Zeichen = Zeichen + Code
-    Buffer(i) = Zeichen                                     ' Zwischenspeichern
-   Next
-
-   For I = 1 To K_num_prg
-    Ee_program(i) = Buffer(i)                               ' von Buffer nach EEPROM umkopieren
-   Next
-
-   Print "ready"                                            ' UART Ausgabe
-End Sub File_send
-
-
-
-#if Block_communication = 1
 
 ' ========================================================================
 ' Protokolliges Empfangen von einem Datenblock mit Pruefsumme und Quittung
@@ -3103,8 +3000,6 @@ Sub Run_program()
 End Sub Run_program
 
 
-#endif
-
 ' ========================================================================
 ' UART-Funktion zum Senden und Empfangen von Zeichen über die UART
 ' ========================================================================
@@ -3119,28 +3014,22 @@ Sub Uart()
 
    If Zeichen = Uart_sync Then                              ' UART Sychronzeichen erkannt
     Print K_version                                         ' Antworten mit Versionsnummer
+
+    Sleepflag = 0                                           ' Beleuchtungsuhr zuruecksetzen
+    Portb.0 = 1                                             ' Hintergrundbeleuchtung an
+
     Call Display_con                                        ' "connect" auf der Anzeige darstellen
 
-#if Block_communication = 1
     Do
       Waitms 10
       Zeichenflag = Ischarwaiting()
     Loop Until Zeichenflag = 1                              ' warten bis nächste Zeichen empfangen (immer High - Low)
     Zeichen = Inkey()                                       ' High-Teil
-#else
-    Do
-    Loop Until Ucsr0a.rxc0 = 1                              ' wartenn bis nächste Zeichen empfangen
-    Zeichen = Udr                                           ' Zeichen aus dem UART-Puffer lesen
-#endif
 
     Select Case Zeichen                                     ' Auswertung des Kommandos
-     Case &H53 : Call File_send                             ' sendet Programspeicher zum PC (Binärdaten)
-     Case &H52 : Call File_receive                          ' empfängt Binärdaten vom PC für Programspeicher
-#if Block_communication = 1
      Case &H54 : Call Upload_file                           ' Blockweise routine PC -> boris
      Case &H55 : Call Download_file                         ' Blockweise Routine boris -> PC
      Case &H56 : Call Run_program                           ' Blockweise Routine RUN
-#endif
     End Select
    End If
    Call Restore_w_st                                        ' Anzeigeregister wieder herstellen
