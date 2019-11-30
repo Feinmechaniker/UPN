@@ -49,6 +49,7 @@
 ' 26.07.19  V  04.12 Mnemonik fuer CReg und CProg geaendert
 ' 27.07.19  V  04.13 Kleine Fehler in den CD-Routinen (Fehlerbehandlung) behoben
 ' 29.08.19  V  04.14 External RAM via I2C
+' 18.11.19  V  04.15 Kontrast option fuer FSTN Display mit rotem Hintergrund, RND verbessert, Hintergrundbeleuchtung im Run-Modus schaltet auch nach Timeout aus
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -713,7 +714,8 @@ Sub Polling()
       Call Interpr_xy()
       Call Anzeigen
 
-      Sleepflag = 0
+      ' Sleepflag = 0
+      Goto Runwtr                                           ' Wir nehmen die Zeitschleife fuer die Hintergrundbeleuchtung mit
 
   Else                                                      ' Interaktiv, kein laufendes Programm
 
@@ -893,18 +895,19 @@ Sub Polling()
     Call Update_cache()
 
     ' Wenn lange kein Knopf gedrueckt wurde, schalten wir die Anzeige auf "Sleep",
-    ' Alles aus, nur der allerletzte Dezimalpunkt ist an
     ' Der Timeout (etwa 1 Minute ist hier hartcodiert 42 * 60
+
+  Runwtr:
+
     If Inv_key = 0 Then                                     ' Wenn wir auf die Eingabe nach dem "F" warten, schlafen wir nicht
-       If Sleepflag = 2520 Then
-          Portb.2 = 0                                       ' Dosleep()
-       End If
 
        Incr Sleepflag
 
        If Sleepflag > 2520 Then
-           Sleepflag = 2521
+          Sleepflag = 2521
+          Portb.2 = 0                                       ' Hintergrundbeleuchtung aus
        End If
+
     End If
 
   Weiter:
@@ -1335,6 +1338,9 @@ End Sub Display_adress_input
 Sub Display_error(byval Ec As Byte)
 
    Local N As Byte
+
+   Sleepflag = 0
+   Portb.2 = 1                                              ' Hintergrundbeleuchtung ein
 
    Call Clear_t_st()
 
@@ -2126,6 +2132,9 @@ Sub Pause1s()
    P_goflag = 0
    P_programming = 0
 
+   Sleepflag = 0
+   Portb.2 = 1                                              ' Hintergrundbeleuchtung ein
+
    Call Interpr_xy()
    T_st(16) = "P"
    T_st(15) = "1"
@@ -2301,8 +2310,10 @@ Sub Init_st7036()                                           ' contr 0...3
 
    Spidata = &H15 : Call Sendspi2display(spidata)           ' 3 Zeilen Display
    Spidata = &H55 : Call Sendspi2display(spidata)           ' Buster on, Kontrast
+   ' Spidata = &H55 : Call Sendspi2display(spidata)           ' Buster on, Kontrast - Alternativ fuer FSTN
    Spidata = &H6E : Call Sendspi2display(spidata)           ' Spannungsfolger
    Spidata = &H72 : Call Sendspi2display(spidata)           ' Kontrast
+   ' Spidata = &H7C : Call Sendspi2display(spidata)           ' Kontrast - ALternativ fuer FSTN
 
 #endif
 
@@ -2399,9 +2410,9 @@ Function Exec_kdo() As Byte
             ___rseed = Sleepflag
             Rnd_setup = 1
          End If
-         Intrnd = Rnd(10000)
+         Intrnd = Rnd(65535)
          Rx = Intrnd
-         Rx = Rx / 10000.0 :
+         Rx = Rx / 65535.0 :
       Case K_durch                                          ' "/"
          Lstx = Rx
          Rx = Ry / Rx
@@ -3848,6 +3859,9 @@ Sub Uart()
    Zeichen = Inkey()                                        ' Ein Zeichen von der UART
 
    If Zeichen = Uart_sync Then                              ' UART Sychronzeichen erkannt
+    Sleepflag = 0
+    Portb.2 = 1                                             ' Hintergrundbeleuchtung ein
+
     Print K_version                                         ' Antworten mit Versionsnummer
     Call Display_con                                        ' "connect" auf der Anzeige darstellen
 
