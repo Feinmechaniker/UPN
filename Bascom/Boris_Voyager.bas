@@ -50,6 +50,7 @@
 ' 27.07.19  V  04.13 Kleine Fehler in den CD-Routinen (Fehlerbehandlung) behoben
 ' 29.08.19  V  04.14 External RAM via I2C
 ' 18.11.19  V  04.15 Kontrast option fuer FSTN Display mit rotem Hintergrund, RND verbessert, Hintergrundbeleuchtung im Run-Modus schaltet auch nach Timeout aus
+' 09.12.19  V  04.16 Bugfixes (Enter, Zahlenfehler bei 2474836.., RND-Init im Run-mode),
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -1523,7 +1524,7 @@ Sub Interpr_reg(byval Reg As Double)
 
         Ij = Lastpos
 
-        If Rxwrk < 100000000000.0 And Rxwrk > 0.000000001 Then       ' Kleine Float-Anzeige ohne E
+        If Rxwrk < 2147483647.0 And Rxwrk > 0.00000000045 Then       ' Kleine Float-Anzeige ohne E
 
            Rxwrk = Round_me(rxwrk , Ij)
 
@@ -2661,6 +2662,12 @@ Function Exec_kdo() As Byte
       Case P_start                                          ' Start / Stop der Programmausfuehrung
            P_goflag = Not P_goflag
            If P_goflag = 1 Then
+              If Rnd_setup = 0 Then                         ' Wenn der Zufallszahlengenerator aus dem Programm heraus gerufen werden soll, soll er auch initialisiert sein
+                 ___rseed = Sleepflag
+                 Rnd_setup = 1
+              End If
+              Sleepflag = 0                                 ' Beleuchtungsuhr zuruecksetzen
+              Portb.2 = 1                                   ' Hintergrundbeleuchtung an
               Pc = P_pc + 1
               L_code = Ee_program(pc)
               L_cmd = High(l_code)                          ' Trennung Code von Adresse
