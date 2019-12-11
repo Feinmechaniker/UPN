@@ -43,6 +43,7 @@
 '                    3.12 64 Zahlenspeicher, plain USB-Funktionen entfernt, Bugfixes
 '                    3.14 Kontrast optimiert fuer FSTN Display mit rotem Hintergrund,
 '                         RND verbessert, Hintergrundbeleuchtung im Run-Modus schaltet auch nach Timeout aus
+'                    3.16 Bugfixes (Enter, Zahlenfehler bei 2474836.., RND-Init im Run-mode),
 '
 '----------------------------------------------------------
 
@@ -55,6 +56,7 @@ $baud = 9600                                                ' Baudrate der UART:
 
 ' Osccal = 115                                                ' Kalibrierung des RC Oscillators, Dieser Wert muss noch hinexperimentiert werden
 Osccal = 84                                                 ' Kalibrierung des RC Oscillators, Dieser Wert muss noch hinexperimentiert werden
+
 Echo Off
 
 $hwstack = 196                                              ' hardware stack (32)
@@ -66,7 +68,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "5.3.14"                                  '
+Const K_version = "5.3.16"                                  '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -931,8 +933,9 @@ Local N_3 As Byte
 
     If Z_inputflag = 0 And P_programming = 0 Then           ' Wenn wir in die Zahleneingabe umschalten schieben wir die X-Eingabe eine Zeile hoch
        For N_3 = 1 To 16
-           V_st(n_3) = W_st(n_3)
+          V_st(n_3) = W_st(n_3)
        Next N_3
+    '   Call Interpr_xy()
     End If
 
     Z_inputflag = 1
@@ -1294,7 +1297,7 @@ Sub Interpr_reg(byval Reg As Double)
 
         Ij = Lastpos
 
-        If Rxwrk < 100000000000.0 And Rxwrk > 0.000000001 Then       ' Kleine Float-Anzeige ohne E
+        If Rxwrk < 2147483647.0 And Rxwrk > 0.00000000045 Then       ' Kleine Float-Anzeige ohne E
 
            Rxwrk = Round_me(rxwrk , Ij)
 
@@ -2280,14 +2283,14 @@ Function Exec_kdo() As Byte
             End If
       Case P_start                                          ' Start / Stop der Programmausfuehrung
            P_goflag = Not P_goflag
-           Sleepflag = 0                                    ' Beleuchtungsuhr zuruecksetzen
-           Portb.0 = 1                                      ' Hintergrundbeleuchtung an
 
            If P_goflag = 1 Then
               If Rnd_setup = 0 Then
                  ___rseed = Sleepflag
                  Rnd_setup = 1
               End If
+              Sleepflag = 0                                 ' Beleuchtungsuhr zuruecksetzen
+              Portb.0 = 1                                   ' Hintergrundbeleuchtung an
               Pc = P_pc + 1
               L_code = Ee_program(pc)
               L_cmd = High(l_code)                          ' Trennung Code von Adresse
