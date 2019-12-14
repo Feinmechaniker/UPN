@@ -46,7 +46,8 @@
 '           2.15 Einstellungsmimik (Displaymodus, grd/rad) geaendert, rechnende Speicher
 '           2.16 Dezimalpunktfehler bei Mehrfacheingabe
 '           2.17 Zusatzfunktionen / Alternative Verwendung der seriellen Schnittstelle
-'
+'           2.18 Bugfixes (RND-Init im Run-mode),
+'                Interaktiver GOSUB Modus zur Ausfuehrung von Unterprogrammen interaktiv,
 '
 '----------------------------------------------------------
 
@@ -69,7 +70,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "4.2.17"                                  '
+Const K_version = "4.2.18"                                  '
 
 ' Compile-Switch um zwischen U821 und normaler Zifferndarstellung zu unterscheiden
 Const U821_disp = 1                                         ' U821 Display Mode
@@ -240,6 +241,8 @@ Dim P_sp As Byte                                            ' Stackpointer, eige
 Dim P_pc As Byte                                            ' Der Programmzeiger, Logisch, 0-99
 Dim P_runflag As Bit                                        ' Flag ob wir gerade im Auto- oder Programmiermodus sind
 Dim P_goflag As Bit                                         ' Flag ob wir gerade das Programm ausfuehren oder interaktiv rechnen
+
+Dim P_akt_pc As Byte                                        ' Rettung des aktuellen Programmzeigers bei interaktivem GOSUB
 
 Dim P_heartbeat As Byte                                     ' Flag Zur Schlangensteuerung
 
@@ -429,6 +432,8 @@ P_sp = 1
 P_pc = 0                                                    ' Beim Einschalten geht es bei 0 los
 P_runflag = 0                                               ' 0 =  Auto, 1 = Programmiermodus
 P_goflag = 0                                                ' Beim EInschalten sind wir im Interaktiv-Modus
+
+P_akt_pc = 0
 
 P_heartbeat = 0
 
@@ -924,9 +929,9 @@ Function Exec_kdo() As Byte
             ___rseed = Sleepflag
             Rnd_setup = 1
          End If
-         Intrnd = Rnd(10000)
+         Intrnd = Rnd(65535)
          Rx = Intrnd
-         Rx = Rx / 10000.0 :
+         Rx = Rx / 65535.0 :
       Case K_durch                                          ' "/"
          Lstx = Rx
          Rx = Ry / Rx
@@ -1102,9 +1107,15 @@ Function Exec_kdo() As Byte
            Call Beepme
       Case P_gosub
            If P_sp < 16 Then
+              If P_goflag = 0 Then                          ' Im Interaktiven Modus machen wir folgendes:
+                 P_akt_pc = P_pc                            ' Wir merken uns die physische Stelle, an der wir waren
+              End If
               Incr P_sp                                     '
               P_stack(p_sp) = P_pc
               P_pc = X_adresse
+              If P_goflag = 0 Then                          ' Im Interaktiven Modus startet GOSUB einen Programmlauf
+                 P_goflag = 1
+              End If
            Else
               Call Error_string(d_char_s)
               ' P_goflag = 0
@@ -1114,7 +1125,12 @@ Function Exec_kdo() As Byte
            Call Beepme
       Case P_return
            P_pc = P_stack(p_sp)
-           Incr P_pc                                        ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+           If P_stack(p_sp) = P_akt_pc Then                 ' Wir sind am Ende eines interaktiven GOSUB
+                 P_akt_pc = 0
+                 P_goflag = 0                               ' Wir halten wieder an nach der Ausfuehrung
+           Else
+              Incr P_pc                                     ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+           End If
            If P_sp > 1 Then
               Decr P_sp
            Else
@@ -1132,6 +1148,10 @@ Function Exec_kdo() As Byte
       Case P_start                                          ' Start / Stop der Programmausfuehrung
            P_goflag = Not P_goflag
            If P_goflag = 1 Then
+              If Rnd_setup = 0 Then
+                 ___rseed = Sleepflag
+                 Rnd_setup = 1
+              End If
               Pc = P_pc + 1
               L_code = Ee_program(pc)
               L_cmd = High(l_code)                          ' Trennung Code von Adresse
