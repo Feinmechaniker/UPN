@@ -44,6 +44,7 @@
 '                    3.14 Kontrast optimiert fuer FSTN Display mit rotem Hintergrund,
 '                         RND verbessert, Hintergrundbeleuchtung im Run-Modus schaltet auch nach Timeout aus
 '                    3.16 Bugfixes (Enter, Zahlenfehler bei 2474836.., RND-Init im Run-mode),
+'                    3.17 Interaktiver GOSUB Modus zur Ausfuehrung von Unterprogrammen interaktiv,
 '
 '----------------------------------------------------------
 
@@ -68,7 +69,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "5.3.16"                                  '
+Const K_version = "5.3.17"                                  '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -274,6 +275,8 @@ Dim P_goflag As Bit                                         ' Flag ob wir gerade
 Dim Save_programming As Bit
 Dim Save_goflag As Bit
 
+Dim P_akt_pc As Byte                                        ' Rettung des aktuellen Programmzeigers bei interaktivem GOSUB
+
 Dim P_heartbeat As Byte                                     ' Flag Zur Schlangensteuerung
 Dim Kcode As String * 6
 Dim Wrkchar As String * 1
@@ -286,6 +289,7 @@ Dim F_blockfolg As Byte                                     ' Es folgt ein weite
 Dim F_blockptr As Byte                                      ' Adresse der Programmspeicherzelle, die geschrieben wird
 
 Dim Zbuffer(16) As Byte                                     ' Lesepuffer der seriellen Schnittstelle
+
 
 ' ========================================================================
 ' Kommandocodes
@@ -443,6 +447,8 @@ P_sp = 1
 P_pc = 0                                                    ' Beim Einschalten geht es bei 0 los
 P_programming = 0                                           ' 0 =  Auto, 1 = Programmiermodus
 P_goflag = 0                                                ' Beim EInschalten sind wir im Interaktiv-Modus
+
+P_akt_pc = 0
 
 P_heartbeat = 0
 
@@ -2001,6 +2007,7 @@ Function Exec_kdo() As Byte
     Local Pc As Byte                                        ' Index zum Zugriff auf den Programmspeicher, P_PC zaehlt ab 0, PC ab 1
     Local Memcont As Double
     Local Aerr_flg As Byte
+    Local P_new_pc As Byte
 
     Exec_kdo = 0                                            ' Default: OK
 
@@ -2230,9 +2237,15 @@ Function Exec_kdo() As Byte
            Call Beepme
       Case P_gosub
            If P_sp < 16 Then
+              If P_goflag = 0 Then                          ' Im Interaktiven Modus machen wir folgendes:
+                 P_akt_pc = P_pc                            ' Wir merken uns die physische Stelle, an der wir waren
+              End If
               Incr P_sp                                     '
               P_stack(p_sp) = P_pc
               P_pc = X_adresse
+              If P_goflag = 0 Then                          ' Im Interaktiven Modus startet GOSUB einen Programmlauf
+                 P_goflag = 1
+              End If
            Else
               Call Display_error( "S")
               ' P_goflag = 0
@@ -2242,7 +2255,12 @@ Function Exec_kdo() As Byte
            Call Beepme
       Case P_return
            P_pc = P_stack(p_sp)
-           Incr P_pc                                        ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+           If P_stack(p_sp) = P_akt_pc Then                 ' Wir sind am Ende eines interaktiven GOSUB
+                 P_akt_pc = 0
+                 P_goflag = 0                               ' Wir halten wieder an nach der Ausfuehrung
+           Else
+              Incr P_pc                                     ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+           End If
            If P_sp > 1 Then
               Decr P_sp
            Else
