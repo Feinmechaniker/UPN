@@ -52,6 +52,7 @@
 ' 18.11.19  V  04.15 Kontrast option fuer FSTN Display mit rotem Hintergrund, RND verbessert, Hintergrundbeleuchtung im Run-Modus schaltet auch nach Timeout aus
 ' 09.12.19  V  04.16 Bugfixes (Enter, Zahlenfehler bei 2474836.., RND-Init im Run-mode),
 ' 09.12.19  V  04.17 Interaktiver GOSUB Modus zur Ausfuehrung von Unterprogrammen interaktiv,,
+' 21.12.19  V  04.18 Beautify der Float-Anzeige (Nullen entfernt), RETURN im interaktiven Mode = GOTO 000
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -74,7 +75,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.17"                                   '
+Const K_version = "04.18"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -237,6 +238,8 @@ Declare Sub Display_hex(byval Rxwrk As Double)              ' Anzeige im Hex-Mod
 Declare Function Round_me(byval Dbl_in As Double , Num As Byte) As Double       ' Runden fuer die Anzeige
 Declare Function To_digit(byval Input As Byte) As Byte      ' Umwandeln Einstelliger Integer-Zahl nach ASCII
 Declare Sub Disp_e_float(byval Dbl_in As Double , Byval Reg As Double)       ' Grosse Float-Anzeige mit "E"
+
+Declare Sub Beautify_display()                              ' Schwanznullen entfernen
 
 Declare Function Encode_kdo(byval Inputkey As Byte) As String
 Declare Function Decode_kdo(byval Kmd_string As String) As Byte
@@ -1583,6 +1586,9 @@ Sub Interpr_reg(byval Reg As Double)
             W_st(16) = "0"
             W_st(15) = D_char_dp
         End If
+
+        Call Beautify_display()
+
       End If
 
       If Ee_fixflag = S_disp_eng Then                       ' Float-Anzeige mit "E"
@@ -1591,6 +1597,9 @@ Sub Interpr_reg(byval Reg As Double)
             W_st(16) = "0"
             W_st(15) = D_char_dp
         End If
+
+        Call Beautify_display()
+
       End If
 
       If Ee_fixflag = S_disp_hm Then                        ' H:M - Anzeige
@@ -1610,9 +1619,42 @@ Sub Interpr_reg(byval Reg As Double)
 
 End Sub Interpr_reg
 
+' ========================================================================
+' Wir entfernen schwanznullen
+' ========================================================================
+Sub Beautify_display()
+Local Ii As Byte                                            ' Index zum Durchmustern von W_st
+Local Flag_e As Byte
+Local Flag_pkt As Byte
+
+Flag_e = 0
+Flag_pkt = 0
+
+' Durchsuchen Von W_st Nach E Und .
+For Ii = 1 To 16
+   If W_st(ii) = "." Then Flag_pkt = Ii
+   If W_st(ii) = "E" Then Flag_e = Ii + 1
+Next Ii
+
+If Flag_pkt > 0 Then
+   If Flag_e = 0 Then Flag_e = 1
+   Decr Flag_pkt
+   For Ii = Flag_e To Flag_pkt
+      If W_st(ii) = "0" And Ii < Flag_pkt Then
+         W_st(ii) = " "
+      Else
+         Ii = Flag_pkt + 1
+      End If
+   Next Ii
+
+End If
+
+End Sub Beautify_display
+
 
 ' ========================================================================
 Sub Display_hours(byval Rxwrk As Double)
+' ========================================================================
 
   Local Hmstunden As Long
   Local Hmminuten As Long
@@ -2628,20 +2670,24 @@ Function Exec_kdo() As Byte
            End If
            Call Beepme
       Case P_return
-           P_pc = P_stack(p_sp)
-           If P_stack(p_sp) = P_akt_pc Then                 ' Wir sind am Ende eines interaktiven GOSUB
+           If P_goflag = 0 Then                             ' Im Interaktiven Modus ist ein RETURN einfach ein GOTO 000
+              P_pc = 0
+           Else
+              P_pc = P_stack(p_sp)
+              If P_stack(p_sp) = P_akt_pc Then              ' Wir sind am Ende eines interaktiven GOSUB
                  P_akt_pc = 0
                  P_goflag = 0                               ' Wir halten wieder an nach der Ausfuehrung
-           Else
-              Incr P_pc                                     ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+              Else
+                 Incr P_pc                                  ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+              End If
+              If P_sp > 1 Then
+                 Decr P_sp
+              Else
+                 Call Display_error( "S")
+                 ' P_goflag = 0
+                 Exec_kdo = 1
+              End If                                        ' Errorcode = "S"
            End If
-           If P_sp > 1 Then
-              Decr P_sp
-           Else
-              Call Display_error( "S")
-              ' P_goflag = 0
-              Exec_kdo = 1
-           End If                                           ' Errorcode = "S"
            Call Beepme
       Case P_ifless                                         ' If x kleiner 0 goto
            If Rx < 0.0 Then P_pc = X_adresse
