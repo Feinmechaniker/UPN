@@ -45,6 +45,8 @@
 '                         RND verbessert, Hintergrundbeleuchtung im Run-Modus schaltet auch nach Timeout aus
 '                    3.16 Bugfixes (Enter, Zahlenfehler bei 2474836.., RND-Init im Run-mode),
 '                    3.17 Interaktiver GOSUB Modus zur Ausfuehrung von Unterprogrammen interaktiv,
+'                    3.18 Beautify der Float-Anzeige (Nullen entfernt), RETURN im interaktiven Mode = GOTO 000
+'                         Idx im Interaktiven Modus = Exec STEP
 '
 '----------------------------------------------------------
 
@@ -69,7 +71,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "5.3.17"                                  '
+Const K_version = "5.3.18"                                  '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -169,6 +171,7 @@ Declare Sub Display_adress_input()
 Declare Sub Display_code()                                  ' Anzeige des Programmspeichers
 Declare Sub Display_code_line(byval Code_word As Word)      ' Umrechnen einer Codezeile zur ANzeige und anzeigen
 Declare Sub Display_status_line()                           ' Umrechnen einer Codezeile zur ANzeige und anzeigen
+Declare Sub Beautify_display()                              ' Schwanznullen entfernen
 
 Declare Sub Kill_run()                                      ' Programm anhalten
 Declare Sub Display_runmode()                               ' Anzeige "run" in der Statuszeile bei Programmabarbeitung
@@ -351,6 +354,8 @@ Const K_roll = K_enter + K_f_offset                         ' 70   - Roll Down
 Const P_back = K_store + K_f_offset                         ' Programming step back                                  ' STO
 Const P_vor = K_recall + K_f_offset                         ' Programming step forward
 
+Const K_step = K_index                                      ' Execute one step interactively
+
 Const K_quadr = K_sqrt + K_f_offset                         ' 73   - Quadrat
 Const P_ifbig = P_goto + K_f_offset                         ' 74   - If x groesser 0 goto
 Const P_ifequal = P_gosub + K_f_offset                      ' 75   - If x gleich 0 goto
@@ -526,7 +531,7 @@ Sub Polling()
   Bcheck = Checkfloat(rx)
   Errx = Bcheck And 5
 
-  If P_goflag = 1 Then                                      ' Wenn ein Programm ausgeführt wird
+  If P_goflag = 1 Or Pressedkey = K_step Then               ' Wenn ein Programm ausgeführt wird
 
       Store_kdo_active = 0
 
@@ -548,8 +553,10 @@ Sub Polling()
 
       If Pressedkey <> 0 Or Errx <> 0 Then                  ' Jeder Tastendruck oder Fehler stoppt das laufende Programm
          Call Kill_run()
-         If Errx <> 0 Then Call Display_error( "X")
-         Goto Weiter
+         If Pressedkey <> K_step Then
+            If Errx <> 0 Then Call Display_error( "X")
+            Goto Weiter
+         End If
       End If
 
       Saved_ppc = P_pc                                      ' Zur Erkennung, ob ein GOTO ausgefuehrt wurde
@@ -921,6 +928,7 @@ Function Is_transparent(inputkey As Byte) As Byte
    If Inputkey = P_back Then Is_transparent = 1
    If Inputkey = P_vor Then Is_transparent = 1
    If Inputkey = P_auto Then Is_transparent = 1
+   If Inputkey = K_step Then Is_transparent = 1
 End Function Is_transparent
 
 
@@ -1358,6 +1366,9 @@ Sub Interpr_reg(byval Reg As Double)
             W_st(16) = "0"
             W_st(15) = D_char_dp
         End If
+
+        Call Beautify_display()
+
       End If
 
       If Ee_fixflag = S_disp_eng Then                       ' Float-Anzeige mit "E"
@@ -1366,6 +1377,9 @@ Sub Interpr_reg(byval Reg As Double)
             W_st(16) = "0"
             W_st(15) = D_char_dp
         End If
+
+        Call Beautify_display()
+
       End If
 
       If Ee_fixflag = S_disp_hm Then                        ' H:M - Anzeige
@@ -1385,6 +1399,37 @@ Sub Interpr_reg(byval Reg As Double)
 
 End Sub Interpr_reg
 
+
+' ========================================================================
+' Wir entfernen schwanznullen
+Sub Beautify_display()
+Local Ii As Byte                                            ' Index zum Durchmustern von W_st
+Local Flag_e As Byte
+Local Flag_pkt As Byte
+
+Flag_e = 0
+Flag_pkt = 0
+
+' Durchsuchen Von W_st Nach E Und .
+For Ii = 1 To 16
+   If W_st(ii) = "." Then Flag_pkt = Ii
+   If W_st(ii) = "E" Then Flag_e = Ii + 1
+Next Ii
+
+If Flag_pkt > 0 Then
+   If Flag_e = 0 Then Flag_e = 1
+   Decr Flag_pkt
+   For Ii = Flag_e To Flag_pkt
+      If W_st(ii) = "0" And Ii < Flag_pkt Then
+         W_st(ii) = " "
+      Else
+         Ii = Flag_pkt + 1
+      End If
+   Next Ii
+
+End If
+
+End Sub Beautify_display
 
 ' ========================================================================
 Sub Display_hours(byval Rxwrk As Double)
@@ -2254,19 +2299,23 @@ Function Exec_kdo() As Byte
            End If
            Call Beepme
       Case P_return
-           P_pc = P_stack(p_sp)
-           If P_stack(p_sp) = P_akt_pc Then                 ' Wir sind am Ende eines interaktiven GOSUB
+           If P_goflag = 0 Then                             ' Im Interaktiven Modus ist ein RETURN einfach ein GOTO 000
+              P_pc = 0
+           Else
+              P_pc = P_stack(p_sp)
+              If P_stack(p_sp) = P_akt_pc Then              ' Wir sind am Ende eines interaktiven GOSUB
                  P_akt_pc = 0
                  P_goflag = 0                               ' Wir halten wieder an nach der Ausfuehrung
-           Else
-              Incr P_pc                                     ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
-           End If
-           If P_sp > 1 Then
-              Decr P_sp
-           Else
-              Call Display_error( "S")
-              ' P_goflag = 0
-              Exec_kdo = 1
+              Else
+                 Incr P_pc                                  ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+              End If
+              If P_sp > 1 Then
+                 Decr P_sp
+              Else
+                 Call Display_error( "S")
+                 ' P_goflag = 0
+                 Exec_kdo = 1
+              End If
            End If                                           ' Errorcode = "S"
            Call Beepme
       Case P_ifless                                         ' If x kleiner 0 goto
@@ -2901,8 +2950,14 @@ Sub Download_file()
            For Bi = 1 To 4
               Zch = Ee_program(bpc)                         ' Lese Word
               Zbuffer(bj) = High(zch)                       ' High-Teil senden
+
+              ' If Zbuffer(bj) = K_chgxy Then Zbuffer(bj) = 88
+
               Incr Bj
               Zbuffer(bj) = Low(zch)
+
+              ' If Zbuffer(bj) = K_chgxy Then Zbuffer(bj) = 88
+
               Incr Bj
               Incr Bpc
            Next Bi
