@@ -48,6 +48,7 @@
 '           2.17 Zusatzfunktionen / Alternative Verwendung der seriellen Schnittstelle
 '           2.18 Bugfixes (RND-Init im Run-mode),
 '                Interaktiver GOSUB Modus zur Ausfuehrung von Unterprogrammen interaktiv,
+'           2.19 Beautify der Float-Anzeige (Nullen entfernt), RETURN im interaktiven Mode = GOTO 00
 '
 '----------------------------------------------------------
 
@@ -70,7 +71,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "4.2.18"                                  '
+Const K_version = "4.2.19"                                  '
 
 ' Compile-Switch um zwischen U821 und normaler Zifferndarstellung zu unterscheiden
 Const U821_disp = 1                                         ' U821 Display Mode
@@ -143,6 +144,7 @@ Declare Sub Show_f_key()                                    ' Anzeige: Der F-Key
 
 Declare Function Round_me(byval Dbl_in As Double , Num As Byte) As Double       ' Runden fuer die Anzeige
 Declare Sub Disp_e_float(byval Dbl_in As Double)            ' Grosse Float-Anzeige mit "E"
+Declare Sub Beautify_display()                              ' Schwanznullen entfernen
 
 
 ' Eingabefunktionen
@@ -1124,20 +1126,24 @@ Function Exec_kdo() As Byte
            End If
            Call Beepme
       Case P_return
-           P_pc = P_stack(p_sp)
-           If P_stack(p_sp) = P_akt_pc Then                 ' Wir sind am Ende eines interaktiven GOSUB
+           If P_goflag = 0 Then                             ' Im Interaktiven Modus ist ein RETURN einfach ein GOTO 000
+              P_pc = 0
+           Else
+              P_pc = P_stack(p_sp)
+              If P_stack(p_sp) = P_akt_pc Then              ' Wir sind am Ende eines interaktiven GOSUB
                  P_akt_pc = 0
                  P_goflag = 0                               ' Wir halten wieder an nach der Ausfuehrung
-           Else
-              Incr P_pc                                     ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+              Else
+                 Incr P_pc                                  ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
+              End If
+              If P_sp > 1 Then
+                 Decr P_sp
+              Else
+                 Call Error_string(d_char_s)                ' Errorcode = "S"
+                 ' P_goflag = 0
+                 Exec_kdo = 1
+              End If
            End If
-           If P_sp > 1 Then
-              Decr P_sp
-           Else
-              Call Error_string(d_char_s)
-              ' P_goflag = 0
-              Exec_kdo = 1
-           End If                                           ' Errorcode = "S"
            Call Beepme
       Case P_ifless                                         ' If x kleiner 0 goto
            If Rx < 0.0 Then P_pc = X_adresse
@@ -1342,6 +1348,9 @@ Sub Interpr_rx()
               End If
               If Rx < 0.0 Then W_st(8) = D_minus
               If Rx = 0.0 Then W_st(8) = 0 + K_dp_disp      ' Das ist erst mal die "0."
+
+              Call Beautify_display()
+
             End If
 
             If Ee_fixflag = S_disp_eng Then                 ' Float-Anzeige mit "E"
@@ -1422,6 +1431,38 @@ Sub Interpr_rx()
 
 End Sub Interpr_rx
 
+
+' ========================================================================
+' Wir entfernen Schwanznullen
+' ========================================================================
+Sub Beautify_display()
+Local Ii As Byte                                            ' Index zum Durchmustern von W_st
+Local Flag_e As Byte
+Local Flag_pkt As Byte
+
+Flag_e = 0
+Flag_pkt = 0
+
+' Durchsuchen Von W_st Nach E Und .
+For Ii = 1 To 8
+   If W_st(ii) >= K_dp_disp Then Flag_pkt = Ii
+   If W_st(ii) = D_char_e Then Flag_e = Ii + 1
+Next Ii
+
+If Flag_pkt > 0 Then
+   If Flag_e = 0 Then Flag_e = 1
+   Decr Flag_pkt
+   For Ii = Flag_e To Flag_pkt
+      If W_st(ii) = 0 And Ii < Flag_pkt Then
+         W_st(ii) = D_space
+      Else
+         Ii = Flag_pkt + 1
+      End If
+   Next Ii
+
+End If
+
+End Sub Beautify_display
 
 
 
