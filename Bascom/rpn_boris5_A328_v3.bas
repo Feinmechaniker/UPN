@@ -275,6 +275,7 @@ Dim P_sp As Byte                                            ' Stackpointer, eige
 Dim P_pc As Byte                                            ' Der Programmzeiger, Logisch, 0-254
 Dim P_programming As Bit                                    ' Flag ob wir gerade im Auto- oder Programmiermodus sind
 Dim P_goflag As Bit                                         ' Flag ob wir gerade das Programm ausfuehren oder interaktiv rechnen
+Dim P_singelestep As Bit                                    ' Flag ob wir gerade das Programm ausfuehren oder interaktiv rechnen
 Dim Save_programming As Bit
 Dim Save_goflag As Bit
 
@@ -523,15 +524,21 @@ Sub Polling()
   Local Adr_check_flag As Byte
   Local Aerr_flg As Byte
 
-  Pc = P_pc + 1
+  Pc = P_pc + 1                                             ' Physisch / logisch
 
   Tmatrix = Inmaxkey()                                      ' Abfrage der Tastaturmatrix, Return Tastenposition
   Pressedkey = Key2kdo(tmatrix)                             ' Umwandeln in einen Tastaturcode
 
+  If Pressedkey = K_step Then
+     P_singelestep = 1
+  Else
+     P_singelestep = 0
+  End If
+
   Bcheck = Checkfloat(rx)
   Errx = Bcheck And 5
 
-  If P_goflag = 1 Or Pressedkey = K_step Then               ' Wenn ein Programm ausgeführt wird
+  If P_goflag = 1 Or P_singelestep = 1 Then               ' Wenn ein Programm ausgeführt wird
 
       Store_kdo_active = 0
 
@@ -553,7 +560,7 @@ Sub Polling()
 
       If Pressedkey <> 0 Or Errx <> 0 Then                  ' Jeder Tastendruck oder Fehler stoppt das laufende Programm
          Call Kill_run()
-         If Pressedkey <> K_step Then
+         If P_singelestep = 0 Then
             If Errx <> 0 Then Call Display_error( "X")
             Goto Weiter
          End If
@@ -574,7 +581,10 @@ Sub Polling()
          End If
       End If
 
-      If Saved_ppc = P_pc Then Incr P_pc
+      If Saved_ppc = P_pc Then
+         Incr P_pc                                          ' Normale Programmausfuehrung, PC hat sich nicht geaendert
+      End If
+
       If P_pc >= K_num_prg Then                             ' Bei Ueberlauf Fehlermeldung
         Call Display_error( "P")
         Goto Weiter
@@ -2282,13 +2292,13 @@ Function Exec_kdo() As Byte
            Call Beepme
       Case P_gosub
            If P_sp < 16 Then
-              If P_goflag = 0 Then                          ' Im Interaktiven Modus machen wir folgendes:
+              If P_goflag = 0 And P_singelestep = 0 Then    ' Im Interaktiven Modus machen wir folgendes:
                  P_akt_pc = P_pc                            ' Wir merken uns die physische Stelle, an der wir waren
               End If
               Incr P_sp                                     '
               P_stack(p_sp) = P_pc
               P_pc = X_adresse
-              If P_goflag = 0 Then                          ' Im Interaktiven Modus startet GOSUB einen Programmlauf
+              If P_goflag = 0 And P_singelestep = 0 Then    ' Im Interaktiven Modus startet GOSUB einen Programmlauf
                  P_goflag = 1
               End If
            Else
@@ -2299,7 +2309,7 @@ Function Exec_kdo() As Byte
            End If
            Call Beepme
       Case P_return
-           If P_goflag = 0 Then                             ' Im Interaktiven Modus ist ein RETURN einfach ein GOTO 000
+           If P_goflag = 0 And P_singelestep = 0 Then       ' Im Interaktiven Modus ist ein RETURN einfach ein GOTO 000
               P_pc = 0
            Else
               P_pc = P_stack(p_sp)
@@ -2309,6 +2319,7 @@ Function Exec_kdo() As Byte
               Else
                  Incr P_pc                                  ' Wenn sich der P_cp ändert, incrementiert die Automatik den P_pc nicht, daher hier explizit
               End If
+
               If P_sp > 1 Then
                  Decr P_sp
               Else
@@ -2768,10 +2779,10 @@ Sub Display_con()
       T_st(15) = "U"
       T_st(14) = "S"
       T_st(13) = "B"
-      T_st(11) = "-"
-      T_st(10) = "-"
-      T_st(9) = "-"
-      T_st(8) = "-"
+'      T_st(11) = "-"
+'      T_st(10) = "-"
+'      T_st(9) = "-"
+'      T_st(8) = "-"
       Call Anzeigen
 End Sub Display_con
 
@@ -2891,15 +2902,15 @@ End Sub Upload_block
 ' Es wird so lange gelesen, bis ein Endblock erkannt wird
 ' Jeder Block wird quittiert
 Sub Upload_file()
-   T_st(8) = D_char_pfr                                     ' Pfeil rechts
+   T_st(10) = D_char_pfr                                    ' Pfeil rechts
    Call Anzeigen
 
    ' Als erstes soll der Headerblock kommen
    F_nextblock = 0
    Do
       Call Upload_block()
-      T_st(6) = To_digit(f_blocknr \ 10)
-      T_st(5) = To_digit(f_blocknr Mod 10)
+      T_st(8) = To_digit(f_blocknr \ 10)
+      T_st(7) = To_digit(f_blocknr Mod 10)
       Call Anzeigen
    Loop Until F_blockfolg = &HFF
 
@@ -2909,7 +2920,7 @@ End Sub Upload_file
 ' Protokolliges Senden einer Datei
 Sub Download_file()
 
-  T_st(11) = D_char_pfl                                     ' Pfeil links
+  T_st(10) = D_char_pfl                                     ' Pfeil links
   Call Anzeigen
 
   Local Indx As Word
@@ -2972,8 +2983,8 @@ Sub Download_file()
               Call Display_error(bpc)
               Bpc = &HFF
            End If
-           T_st(6) = To_digit(f_blocknr \ 10)
-           T_st(5) = To_digit(f_blocknr Mod 10)
+           T_st(8) = To_digit(f_blocknr \ 10)
+           T_st(7) = To_digit(f_blocknr Mod 10)
            Call Anzeigen
         Loop Until Bpc >= Programsize Or G_uart_error <> 0
      End If
@@ -3061,8 +3072,8 @@ End Sub Download_block
 ' Dort steht die Verwendung 03 und die Startadresse
 Sub Run_program()
 
-  T_st(11) = D_char_pfr                                     ' Pfeil rechts
-  T_st(8) = D_char_pfl                                      ' Pfeil links
+  T_st(10) = D_char_pfr                                     ' Pfeil rechts
+  T_st(9) = D_char_pfl                                      ' Pfeil links
   Call Anzeigen
 
   ' Wir lesen nur den Headerblock
