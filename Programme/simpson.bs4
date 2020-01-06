@@ -1,0 +1,82 @@
+# Programm simpson.bor
+# Simpsonsche Regel zum berechen bestimmter Integrale
+# basiert auf dem Beispiel bei Kreul
+#
+# f(x) als Unterprogramm ab 60
+# start 000, dann Eingabe untere und obere Grenze, RUN
+# Anzeige des bestimmten Integrals
+#
+# Verwendete Speicher: 0 1 2 3 4 5 6 7 8
+# 00 - a - untere Grenze
+# 01 - b - obere Grenze
+# 08 - m - streifenanzahl (20) besser direkt als Loop8
+# 03 - i - Index, bei geradem i wird mit 2, bei ungeradem mit 4 multipliziert
+# 04 - Faktor
+# 05 - h - Schrittweite
+# 06 - x
+# 07 - S
+000 2           ; Initialisierung, wir geben m als 20 vor
+    0
+    STO 8
+    1
+    STO 3
+    HALT         ; Eingabe untere und obere grenze in y und x
+    STO 1        ; Obere Grenze
+    X<->Y
+    STO 0        ; Untere Grenze
+    -
+    RCL 8
+    /
+    STO 5         ; Schrittweite
+    RCL 0
+    STO 6         ; x = a
+    GOSUB 60     ; Call f(x) fuer ersten Summand
+    STO 7         ; S = f(x)
+017 RCL 5         ; Schleife
+    STO+ 6        ; x=x+h
+    RCL 3
+    2
+    /
+    FRAC
+    X=0 27        ; if i = 0 = gerade
+024 4
+    STO 4
+    GOTO 29
+027 2
+    STO 4
+029 1
+    STO+ 3
+    RCL 6
+    GOSUB 60     ; Call f(x) 
+    RCL 4
+    *
+    STO+ 7
+    1
+    RCL 8
+    RCL 3
+    -
+    X>0 17
+041 RCL 1
+    GOSUB 60
+    STO+ 7
+    RCL 7
+    RCL 5
+    *
+    3
+    /
+049 HALT
+    GOTO 0
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+060 SIN        ; Hier Damit bei sin 0-pi/2 auch wirklich 1 rauskommt muss ter modus "rad" sein
+    RETURN     ; 
+062 END 62
+
+
