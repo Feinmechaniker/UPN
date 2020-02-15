@@ -53,6 +53,8 @@
 ' 09.12.19  V  04.16 Bugfixes (Enter, Zahlenfehler bei 2474836.., RND-Init im Run-mode),
 ' 09.12.19  V  04.17 Interaktiver GOSUB Modus zur Ausfuehrung von Unterprogrammen interaktiv,,
 ' 21.12.19  V  04.18 Beautify der Float-Anzeige (Nullen entfernt), RETURN im interaktiven Mode = GOTO 000
+' 13.02.20  V  04.19 Hintergrundbeleuchtung bei erfolgreichem Programmende korrigiert 
+'
 '-------------------------------------------------------------------------------------
 
 $regfile = "m1284pdef.dat"                                  ' Prozessor ATmega1284P
@@ -75,7 +77,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "04.18"                                   '
+Const K_version = "04.19"                                   '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -2738,6 +2740,8 @@ Function Exec_kdo() As Byte
               Else
                  P_sp = 1                                   ' Stackpointer zurÃ¼cksetzen bei Programmstart
               End If
+           Else
+              Call Kill_run()                               ' Hintergrundlicht wieder an bei "HALT" oder "END"
            End If
            Call Beepme
       Case K_nop
