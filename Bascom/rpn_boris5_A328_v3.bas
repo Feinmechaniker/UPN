@@ -47,6 +47,7 @@
 '                    3.17 Interaktiver GOSUB Modus zur Ausfuehrung von Unterprogrammen interaktiv,
 '                    3.18 Beautify der Float-Anzeige (Nullen entfernt), RETURN im interaktiven Mode = GOTO 000
 '                         Idx im Interaktiven Modus = Exec STEP
+'                    3.19 Normale Idx-Funktion in der Eingabe repariert, Hintergrundbeleuchtung bei erfolgreichem Programmende korrigiert 
 '
 '----------------------------------------------------------
 
@@ -57,8 +58,8 @@ $prog &HFF , &H62 , &HD9 , &HFF                             ' generated. Take ca
 $crystal = 1000000                                          ' Kein Quarz: 1MHz MHz
 $baud = 9600                                                ' Baudrate der UART: 9600 Baud
 
-' Osccal = 115                                                ' Kalibrierung des RC Oscillators, Dieser Wert muss noch hinexperimentiert werden
-Osccal = 84                                                 ' Kalibrierung des RC Oscillators, Dieser Wert muss noch hinexperimentiert werden
+' Osccal = 115                                                ' Rot - Kalibrierung des RC Oscillators, Dieser Wert muss noch hinexperimentiert werden
+Osccal = 84                                                 ' Gruen - Kalibrierung des RC Oscillators, Dieser Wert muss noch hinexperimentiert werden
 
 Echo Off
 
@@ -71,7 +72,7 @@ $lib "double.lbx"
 $lib "fp_trig.lbx"
 
 ' Hardware/Softwareversion
-Const K_version = "5.3.18"                                  '
+Const K_version = "5.3.19"                                  '
 
 ' Compile-Switch um HP29C-kompatibel zu sein, beim Runterrutschen nach dem Rechnen, wird der Inhalt von Rt erhalten
 Const Hp29c_comp = 1
@@ -163,6 +164,8 @@ Declare Sub Beepme()                                        ' Ein kurzes Blinzel
 Declare Sub Pause1s()                                       ' 1 Sekunde Pause
 Declare Sub Save_w_st()                                     ' Anzeigeregister W_st sichern
 Declare Sub Restore_w_st()                                  ' Anzeigeregister W_st zurueckladen
+Declare Sub Clear_v_st()                                    ' V-zeile loeschen
+Declare Sub Clear_w_st()                                    ' W-zeile loeschen
 Declare Sub Clear_t_st()                                    ' Statuszeile loeschen
 Declare Sub Clear_output()                                  ' Ausgaberegister leeren
 Declare Sub Display_error(byval Ec As Byte)                 ' Die Error-Zeichenkette ausgeben
@@ -529,7 +532,7 @@ Sub Polling()
   Tmatrix = Inmaxkey()                                      ' Abfrage der Tastaturmatrix, Return Tastenposition
   Pressedkey = Key2kdo(tmatrix)                             ' Umwandeln in einen Tastaturcode
 
-  If Pressedkey = K_step Then
+  If Pressedkey = K_step And Adr_input_flag = 0 Then
      P_singelestep = 1
   Else
      P_singelestep = 0
@@ -538,7 +541,7 @@ Sub Polling()
   Bcheck = Checkfloat(rx)
   Errx = Bcheck And 5
 
-  If P_goflag = 1 Or P_singelestep = 1 Then               ' Wenn ein Programm ausgeführt wird
+  If P_goflag = 1 Or P_singelestep = 1 Then                 ' Wenn ein Programm ausgeführt wird
 
       Store_kdo_active = 0
 
@@ -1064,13 +1067,43 @@ End Sub Clear_input
 ' Ausgaberegister leeren
 ' ========================================================================
 Sub Clear_output()
-   Local N As Byte
-   For N = 1 To 16
-      T_st(n) = D_space                                     ' ASCII Leerzeichen
-      V_st(n) = D_space                                     ' ASCII Leerzeichen
-      W_st(n) = D_space                                     ' ASCII Leerzeichen
-   Next N
+   Call Clear_w_st()
+   Call Clear_v_st()
+   Call Clear_t_st()
 End Sub Clear_output
+
+' ========================================================================
+' Statuszeile t_st bereinigen
+' ========================================================================
+Sub Clear_t_st()
+   Local N As Byte
+
+   For N = 1 To 16
+      T_st(n) = D_space
+   Next N
+End Sub Clear_t_st()
+
+' ========================================================================
+' Zeile w_st bereinigen
+' ========================================================================
+Sub Clear_w_st()
+   Local N As Byte
+
+   For N = 1 To 16
+      W_st(n) = D_space
+   Next N
+End Sub Clear_w_st()
+
+' ========================================================================
+' Zeile v_st bereinigen
+' ========================================================================
+Sub Clear_v_st()
+   Local N As Byte
+
+   For N = 1 To 16
+      V_st(n) = D_space
+   Next N
+End Sub Clear_v_st()
 
 
 ' ========================================================================
@@ -1084,7 +1117,7 @@ Sub Show_f_key()
           T_st(16) = "F"
           T_st(15) = D_space
           T_st(14) = D_space
-          T_st(13) = D_space
+          ' T_st(13) = D_space ' Doppelt gemoppelt
      Else
           Call Restore_w_st
      End If
@@ -1191,7 +1224,7 @@ Sub Display_error(byval Ec As Byte)
    T_st(8) = "r"
    T_st(7) = "o"
    T_st(6) = "r"
-   T_st(5) = D_space                                        ' ASCII Leerzeichen
+   ' T_st(5) = D_space                                        ' ASCII Leerzeichen, Doppelt gemoppelt
    T_st(4) = Ec
 
    P_goflag = 0                                             ' Fehler fuehren immer zum Programmhalt
@@ -1278,9 +1311,7 @@ Sub Interpr_reg(byval Reg As Double)
    ' Wenn kein Error - Ausgeben
    If Errx = 0 Then
 
-      For Ii = 1 To 16
-         W_st(ii) = D_space                                 ' ASCII Leerzeichen
-      Next Ii
+      Call Clear_w_st()
 
       Rxwrk = Abs(reg)                                      ' Das Vorzeichen machen wir dann selbst
       If Reg < 0.0 Then
@@ -1626,9 +1657,7 @@ Sub Display_code_line(byval Code_word As Word)
 
   Local Indexflag As Byte
 
-  For N_1 = 1 To 16
-    W_st(n_1) = D_space
-  Next N_1
+  Call Clear_w_st()
 
   Pcode = High(code_word)                                   ' Trennung Code von Adresse
 
@@ -1894,17 +1923,6 @@ Sub Restore_w_st()
    Next N
 End Sub Restore_w_st
 
-
-' ========================================================================
-' Statuszeile t_st bereinigen
-' ========================================================================
-Sub Clear_t_st()
-   Local N As Byte
-
-   For N = 1 To 16
-      T_st(n) = D_space
-   Next N
-End Sub Clear_t_st()
 
 
 ' ========================================================================
@@ -2379,6 +2397,8 @@ Function Exec_kdo() As Byte
               Else
                  P_sp = 1                                   ' Stackpointer zurücksetzen bei Programmstart
               End If
+           Else
+              Call Kill_run()                               ' Hintergrundlicht wieder an bei "HALT" oder "END"
            End If
            Call Beepme
       Case K_nop
