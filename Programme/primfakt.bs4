@@ -1,0 +1,44 @@
+# Primfaktorzerlegung einer ganzen Zahl
+# Programm primfakt.bs5
+# Verwendete Speicher: 
+# 1..3 Rechenspeicher
+# Programmstart bei 000, RUN, es erscheint eine 2
+# dann (bei 002) x eingeben, RUN
+# Ausgabe Primfaktor, RUN bis zum Ende.
+#             Endekennzeichen 1 oder ERROR
+# Beispiel: 12345678 -> 2 3 3 47 14593 (etwa 50s Rechenzeit)
+#
+000 2          ; Mit der Primzahl fangen wir an
+    sto 3      ; Versuchswert Primfaktor in 3     
+002 HALT       ; Eingabe Zahl, speichern in 1
+    sto 1
+    SQRT
+    sto 2      ; Obergrenze des Suchraumes in 2
+006 rcl 1
+    rcl 3
+    /
+    INT
+010 rcl 3
+    *
+    rcl 1
+    -
+    x=0 028 ; Primfaktor passt
+    rcl 3
+    rcl 2
+    -
+    x<0 023
+    rcl 1
+020 HALT
+    cx
+    /    ; Error !
+023 rcl 3
+    1
+    +
+    sto 3
+    goto 006
+028 rcl 1  ; Anzeigen und Weitermachen
+    rcl 3
+    HALT
+    /
+    goto 003
+    END 033   
