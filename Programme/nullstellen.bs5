@@ -1,0 +1,60 @@
+# Suche nach Nullstellen einer Funktion in einem Intervall
+# Programm nullstellen.bs5
+# Verwendete Speicher: 
+# 2..8 Rechenspeicher
+# 4: Linke Intervallgrenze ; Vor Programmstart belegen
+# 5: Rechte Intervallgrenze ; Vor Programmstart belegen
+# Funktion als Unterprogramm ab 050
+# Rechte und Linke Intervallgrenze in speicher 4,5 vorgeben, dann Programmstart bei 000,
+# Ausgabe Verbessertes Intervall oder ERROR x
+#
+000 HALT
+    9     ; Anzahl der Intervalle im Bereich
+    sto 7 ; Zum steuern der inneren loop
+    sto 8 ; zum steuern der auesseren Loop
+004 rcl 5 ; Programmstart auessere Loop
+    rcl 4
+    -
+    9
+    /
+    nop
+010 sto 3 ; Intervallbreite
+    rcl 4
+    gosub 050
+    sto 2 ; Funktionswert der linken Intervallgrenze
+    rcl 4
+015 rcl 3 ; innere Loop
+    +
+    gosub 050
+    rcl 2
+    *
+020 if x<0 030  ; Einer der Funktionswerte war negativ, Im Intervall liegt eine Nullstelle
+    if x=0 030  ; Einer der Funktionswerte war 0
+    rcl 4
+    rcl 3
+    +
+    sto 4       ; neue Rechte Intervallgrenze
+    loop7 015
+027 cx
+    /    ; Error anzeigen
+    goto 000
+030 9    ; Wir haben im Intervall eine Nullstelle! - Weiter verfeinern
+    sto 7
+    rcl 4
+    rcl 3
+    +
+    sto 5 ; Das ist die Verfeinerte rechte Intervallgrenze
+    loop8 004
+    gosub 050 ; wir haben uns durchgeloopt und durchverfeinert. Haben wir nun was gefunden?
+    rcl 2
+    *
+    if x>0 027
+    rcl 4 
+    rcl 5
+    goto 000
+050 enter ; Unterprogramm für die Funktion, Beispiel x^2-1
+    *
+    1
+    -
+    return
+    end 055
