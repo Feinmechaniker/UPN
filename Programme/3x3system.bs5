@@ -1,6 +1,6 @@
-# Lösung eines lineares Gleichungssystems 3.grades
+# Lösung eines linearen Gleichungssystems 3.grades
 # Programm 3x3system.bs5
-# Verwendete Speicher: 1-9 Matrix, 1-12 Vektor, 13 det
+# Verwendete Speicher: 1-9 Matrix, 10-12 Vektor, 13 determinante
 # Bedienung: goto 000, RUN, Eingabe des Gleichungssystems (a1 enter a2 enter a3 enter y1 RUN) ...
 # Ausgabe der Lösung x1 RUN x2 RUN x3 
 # Beispiel: 1*x1 + 2*x2 +3*x3 = 14
