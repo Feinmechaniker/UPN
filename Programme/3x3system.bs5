@@ -1,0 +1,130 @@
+# Lösung eines lineares Gleichungssystems 3.grades
+# Programm 3x3system.bs5
+# Verwendete Speicher: 1-9 Matrix, 1-12 Vektor, 13 det
+# Bedienung: goto 000, RUN, Eingabe des Gleichungssystems (a1 enter a2 enter a3 enter y1 RUN) ...
+# Ausgabe der Lösung x1 RUN x2 RUN x3 
+# Beispiel: 1*x1 + 2*x2 +3*x3 = 14
+#           1*x1 + 3*x2 +4*x3 = 19
+#           1*x1 + 4*x2 +2*x3 = 15
+# Lösung: x1 = 1; x2 = 2; x3 = 3
+# Falls Gleichungssystem nicht lösbar (abhängige Zeilen ) - Error X
+#
+000 NOP   ; Programmstart, Eingabe der Koeffizienten 
+    HALT  ; Erste gleichung a1*x1 + a2*x2 + a3*x3 = y1
+    sto 10
+    rdn
+    sto 03
+    rdn
+    sto 02
+    rdn
+    sto 01
+009 HALT  ; Zweite gleichung b1*x1 + b2*x2 + b3*x3 = y2
+    sto 11
+    rdn
+    sto 06
+    rdn
+    sto 05
+    rdn
+    sto 04
+017 HALT  ; Dritte gleichung c1*x1 + c2*x2 + c3*x3 = y3
+    sto 12
+    rdn
+    sto 09
+    rdn
+    sto 08
+    rdn
+    sto 07
+025 gosub 087 ; Koeffizientendeterminante berechnen
+    1/x
+    sto 13  ; Inverse Determinante merken
+    rcl 01  ; Tauschen der ersten Matrixspalte mit dem Ergebnisvektor
+    rcl 10
+    sto 01
+    x<->y
+    sto 10
+    rcl 04
+    rcl 11
+    sto 04
+    x<->y
+    sto 11
+    rcl 07
+    rcl 12
+    sto 07
+    x<->y
+    sto 12
+    gosub 087 ; Determinante nochmal berechnen
+    rcl 13
+    *
+    halt    ; Anzeige x1
+    rcl 02  ; Tauschen der zweiten Matrixspalte mit der ersten
+    rcl 10
+    sto 02
+    x<->y
+    sto 10
+    rcl 05
+    rcl 11
+    sto 05
+    x<->y
+    sto 11
+    rcl 08
+    rcl 12
+    sto 08
+    x<->y
+    sto 12
+    gosub 087 ; neue Determinante berechnen
+    /-/
+    rcl 13
+    *
+    halt ; Anzeige x2
+    rcl 03 ; Tauschen der dritten Matrixspalte
+    rcl 10
+    sto 03
+    x<->y
+    sto 10
+    rcl 06
+    rcl 11
+    sto 06
+    x<->y
+    sto 11
+    rcl 09
+    rcl 12
+    sto 09
+    x<->y
+    sto 12
+    gosub 087
+    rcl 13
+    *
+    halt  ; Anzeige x3
+    goto 000
+087 rcl 05 ; Unterprogramm Determinantenberechnung in den Speicher 1-9 ist die Matrix)
+    rcl 03
+    *
+    rcl 06
+    rcl 02
+    *
+    -
+    rcl 07
+    *
+    rcl 06
+    rcl 01
+    *
+    rcl 04
+    rcl 03
+    *
+    -
+    rcl 08
+    *
+    +
+    rcl 04
+    rcl 02
+    *
+    rcl 05
+    rcl 01
+    *
+    -
+    rcl 09
+    *
+    +
+    return
+117 end 117
+
