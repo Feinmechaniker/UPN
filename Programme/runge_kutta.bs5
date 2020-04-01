@@ -1,0 +1,96 @@
+# Numerische Lösung eines Anfangswertproblems einer Differentialgleichung
+# Programm runge_kutta.bs5
+# Verwendete Speicher: 
+#            2: linke Grenze 
+#            3: rechte Grenze 
+#            4: x0 (Startwert)
+#            5: y0 (Startwert)
+#            6: x (Parameter für Funktionsaufruf)
+#            7: y (Parameter für Funktionsaufruf)
+#            8: Schrittanzahl - vorgegeben (5)
+#            9: Intervallbreite h
+#            10: halbe Intervallbreite
+#            12: Zwischenspeicher zum Aufsummieren der k1-k4
+#
+# y' = f(x,y) Als Unterprogramm ab 065, 
+#
+# Beispiel y' = y-2x/y mit y(0) = 1 im Intervall 0...2
+# -> 0.4 1.3420    0.8 1.6134   1.2 1.846   1.6 2.0536   2.0 2.2448
+#
+000 5 ; Schrittzahl ueber das Gesamtintervall
+    sto 8
+    HALT ; Eingabe Intervallgrenzen
+    sto 3 ; rechte Intervallgrenze
+    x<->y
+    sto 2 ; linke Intervallgrenze
+    -
+    rcl 8
+    /    ; Intervallbreite
+    sto 9
+    2
+    /
+    sto 10
+    halt ; Eingabe Startwerte x0 y0
+    sto 5 ; y0 - Startwert
+    x<->y
+    sto 4 ; x0 - Startwert
+017 rcl 4  ; x- und y- Werte in die Parameterspeicher ablegen
+    sto 6
+    rcl 5
+    sto 7
+    gosub 065 ; f(x0,y0) = k1
+    sto 12 ; Aufsummiern der kx
+    rcl 10
+    *
+    sto+ 7
+    rcl 10
+    sto+ 6
+    gosub 065 ; f(x1,y1) = k2
+    sto+ 12
+    sto+ 12 ; 2*k2
+    rcl 10
+    *
+    rcl 5
+    +
+    sto 7
+    gosub 065 ; f(x2,y2) = k3
+    sto+ 12
+    sto+ 12 ; 2*k2
+    rcl 9
+    *
+    rcl 5
+    +
+    sto 7
+    rcl 10
+    sto+ 6
+    gosub 065 ; f(x3,y3) = k4
+    sto+ 12
+    rcl 12
+    6
+    /
+    rcl 9
+    *
+    rcl 5
+    + ; der neue y - wert
+    sto 5
+    rcl 6
+    sto 4
+    halt ; Anzeige des iterierten Werte xi und yi
+    loop8 017
+    goto 000
+    NOP
+    NOP
+    NOP
+    NOP
+# Beispiel y' = y-2x/y mit y(0) = 1
+065 rcl 6 ; Unterprogramm der Funktion y' = f(x,y) wobei x in 6 und y in 7
+    2 
+    *
+    rcl 7
+    /
+    rcl 7
+    x<->y
+    -
+    return ; f(x,y) im x-Register
+074 END 074
+
