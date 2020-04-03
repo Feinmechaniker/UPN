@@ -1,0 +1,103 @@
+# Das unvermeidliche Mondlandeprogramm
+# Programm: mondland.bs5
+# Speicher: 6	Hoehe	
+#           7	Geschwindigkeit	
+#           8	Kraftstoff
+#           9	Beschleunigung	
+# Bedienung: Start bei 000 oder 005, RUN, 
+# es wird geschwindigkeit.hoehe in y sowie der Kraftstoff in x angezeigt
+# Eingabe der Kraftstoffmenge RUN.
+# Wenn sanft gelandet wurde erscheint die Landegeschwindigkeit, sonst ERROR
+#
+000 1 ; Programmstart 1 (einfach)
+    2
+    0
+    sto 8 ; Start 1 mit 120 Einheiten Kraftstoff
+    goto 008
+005 6 ; Programmstart 2 (schwierig)
+    0
+    sto 8
+008 5 ; Weitere Variablenvorbelegung
+    0
+    0
+    sto 6 ; Ausgangshoehe 500
+    5
+    0
+    /-/
+    sto 7 ; Ausgangsgeschwindigkeit 50
+016 rcl 6 ; Hier beginnt die Flugschleife
+    INT
+    4 ; 10^4
+    enter
+    1
+    0
+    x^y
+    /
+    rcl 7
+    ABS
+    +
+    rcl 7
+    if x>0 086
+029 x<->y
+    /-/
+    PAUSE ; Anzeige von Hoehe und Geschwindigkeit
+    rcl 8
+    pause
+    PAUSE
+    cx
+    HALT  ; EIngabe STeuerung Kraftstoffverwendung
+037 rcl 8
+    x<->y
+    if x>y 067
+    sto- 8
+    2
+    *
+    5
+    -
+    sto 9
+    2
+    /
+    rcl 6
+    +
+    rcl 7
+    +
+    rcl 9
+    sto+ 7
+    rdn
+    sto 6
+    INT
+    if x>0 016
+058 2 ; aufsetzen max mit Geschwindigkeit 2
+    /-/
+    rcl 7
+    if x<y 064 ; Absturz!
+    HALT ; Anzeige Landegeschwindigkeit
+    goto 000
+064 cx
+    / ; Anzeige Error - Absturz
+    goto 000
+067 rcl 8
+    2
+    .
+    5
+    -
+    sto+ 6
+    2
+    *
+    sto+ 7
+    rcl 6
+    1
+    0
+    *
+    rcl 7
+    sqr
+    +
+    sqrt
+    /-/
+    goto 058
+086 x<->y
+    /-/
+    x<->y
+    goto 029
+090 END 090
+
