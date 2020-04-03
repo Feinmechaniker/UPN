@@ -1,4 +1,4 @@
-# Lösung eines linearen Gleichungssystems 3.grades
+# Lösung eines linearen Gleichungssystems 3.grades per Determinante
 # Programm 3x3system.bs5
 # Verwendete Speicher: 1-9 Matrix, 10-12 Vektor, 13 determinante
 # Bedienung: goto 000, RUN, Eingabe des Gleichungssystems (a1 enter a2 enter a3 enter y1 RUN) ...
