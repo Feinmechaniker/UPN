@@ -4,7 +4,7 @@
 * (One of the last UPN-Taschenrechner)
 * Command line tools to assemble / disassemble program files
 *
-* Copyright (c) 2019 g.dargel <srswift@arcor.de> www.srswift.de
+* Copyright (c) 2019, 2020  g.dargel <srswift@arcor.de> www.srswift.de
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,8 @@
 *
 * **************************************************************************** */
 
+#define PRG_VERSION    "1.1"
+
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
@@ -34,6 +36,10 @@ int statflag_verbose_mode;
 int statflag_fill_nop_mode;
 int statflag_boris4_mode;
 int max_prg;
+
+int lbnr = 0; // Index im Labelarray, anzahl gelesener Labels
+int lbl_line[100]; // Labelarray Zeilennummer
+int lbl_nr[100];   // Labelarray symb. Name
 
 
 /* Funktionsprototypen */
@@ -132,6 +138,7 @@ char bas_code;
 // Input ist ein Pointer auf den Kommandostring, der aber Leerzeichen enthalten kann
 // Wenn er mindestens ein Leerzeichen hat, enthaelt er auch eine Adresse.
 // Die Adresse muss vor dem Zeichenkettenvergleich weggetrimmt werden
+// return 255 = Fehler!
 unsigned short get_cmd_cde(char * code) {
   int i;
   char * last_space;
@@ -194,8 +201,6 @@ unsigned short get_cmd_cde(char * code) {
      }
   }
 
-  fprintf(stderr, "ERROR: Kommando >%s< kann nicht uebersetzt werden\n", code);
-
   return 255;
 }
 
@@ -221,7 +226,7 @@ void clean_code_line(char *line) {
       *cp = '\0';
       cp--;
    }
-   if (statflag_boris4_mode == 6) {
+   // if (statflag_boris4_mode == 6 || statflag_boris4_mode == 5) {
        // Boris6 hat vorn mglw ein Leerzeichen, das kann weg!
        cp = line;
        if (isWspace (*cp)) {
@@ -238,12 +243,12 @@ void clean_code_line(char *line) {
           if (*cp == ':') *cp = ' ';
           cp++; 
        }
-   }
+   // }
 }
 
 
 void usage(char * Program) {
-   fprintf(stderr, "%s - Ein Kommandozeilen Assembler fuer boris4/5/6 - Programme\n\n",Program);
+   fprintf(stderr, "%s - v%s - Ein Kommandozeilen Assembler fuer boris4/5/6 - Programme\n\n",Program, PRG_VERSION);
    fprintf(stderr, "Bitteschoen: %s [-v] [-n] [-4|-5|-6] [-s startadresse] [-o outfile] Eingabedatei\n",Program);
    fprintf(stderr, "     -n          Datei mit NOP auffuellen\n");
    fprintf(stderr, "     -v          geschwaetziger modus\n");
@@ -252,6 +257,41 @@ void usage(char * Program) {
    fprintf(stderr, "     -6          boris6 (voyager) - modus (default)\n");
    fprintf(stderr, "     -s Adresse  Startadresse des Programms (default: 0)\n");
    fprintf(stderr, "     -o Datei    Ausgabe in eine Datei (default: stdout)\n");
+}
+
+// Adresse bestimmen, entweder aus dem String 3stellige Zahl direkt lesen,
+// oder aus der Label-Tabelle lesen,
+// Im Fehlerfall: Return -1
+int translate_label(char *s) {
+    char *p;
+    int scan_lbl;
+    int i;
+
+    static int adresse;
+
+    adresse = -1;
+
+    if (*s == 'l' || *s == 'L') {
+       // Symbolische Adresse, aus Tabelle heraussuchen
+       p = s+1;
+       i = sscanf(p, "%d", &scan_lbl);
+       if (i == 1) {
+          for (i=0; i<lbnr; i++) {
+              if (lbl_nr[i] == scan_lbl)
+                 adresse = lbl_line[i];
+          }
+       }
+    } else {
+       i = sscanf(s, "%d", &scan_lbl);
+       if (i == 1 && scan_lbl < 255) 
+          adresse = scan_lbl;
+    }
+    if (adresse < 0) adresse = -1;
+
+    if (statflag_verbose_mode) {
+         fprintf (stderr, "Adresse decodiert >%s< - %d\n", s, adresse);
+    }
+    return (adresse);
 }
 
 
@@ -264,11 +304,16 @@ int main(int argc, char * argv[]) {
      char *cp;
      int c, i, a;
 
+     int errstate;
+
      int startadr;
      char startadr_str[256];
 
      int adresse;
      int zeile;
+
+     char *lb;
+     int dlabel = 0; // gelesenes Label
 
      unsigned short code;
 
@@ -403,107 +448,181 @@ int main(int argc, char * argv[]) {
 #endif
 
          a = startadr;
+         lbnr = 0;
+         errstate = 0; // nur wenn der pre-Lauf OK ist, machen wir weiter
 
-         // printf("%c%c", 170, 83);
+         // Erst ein mal ein Pre-Lauf ueber die Datei, wir sammeln die Label 
+         // und bauen eine Liste der symbolischen Adressen
+
          while (fgets(s, 255, file_in) != NULL) {
             if (!is_comment(line)) {
                clean_code_line(line);
-               if (statflag_verbose_mode)
-                    fprintf (stderr, "cleaned code line >%s<\n", line);
-
                if (strlen(line) > 0) {
-                  if (isWspace (line[0])){
-                     // wir haben vorn keine Zeilennummer
-                     // i = sscanf(s, "%[^@]@%d", kdo, &adresse);
-                     zeile = 0;
-                     // vorspulen bis zum ersten "Nicht-Leerzeichen"
-                     cp = line;
-                     while (isWspace(*cp) && *cp != '\0') cp++;
-                     i = 1;
-                  } else {
-                     // wir haben vorn eine Zeilennummer
-                     // i = sscanf(s, "%d%[^@]@%d", &zeile, kdo, &adresse);
-                     i = sscanf(s, "%d", &zeile);
-                     // Fehlerbehandlung bzw Markenverschiebung
-                     if (a != zeile) {
-                         fprintf(stderr, "WARNING: Adressabweichung in Zeile %d (%d)\n", a, zeile);
-                         if (a < zeile) {
-                            while (a < zeile) {
-                              fprintf(file_out, "%c%c", 0, 0);
-                              a++;
+                  if (!isWspace (line[0])){
+                     // wir haben vorn eine Zeilennummer oder symb. Adresse
+                     if (line[0] == 'l' || line[0] == 'L') {
+                        lb = &line[1];
+                        // symbolische Adresse, merken!
+                        i = sscanf(lb, "%d", &dlabel);
+                        if (i == 1) {
+                            // Bereits gelesens Labels auf Duplikate prüfen
+                            for (i=0; i<lbnr; i++) {
+                               if (lbl_nr[i] == dlabel) {
+                                   fprintf(stderr, "ERROR: Doppeltes Label %d in Zeile %d  / %d\n", dlabel, lbl_line[i], a);
+                                   errstate = 1;
+                               }
                             }
-                         } else {
-                            fprintf(stderr, "ERROR: Adressabweichung in Zeile %d (%d) nicht korrigierbar\n", a, zeile);
-                         }
+                        } else {
+                            fprintf(stderr, "ERROR: Lesefehler label in Zeile (%d) >%s<\n", a, line);
+                            errstate = 1;
+                        }
+
+                        if (errstate == 0) {
+                           lbl_nr[lbnr] = dlabel;
+                           lbl_line[lbnr] = a;
+
+                           lbnr++;
+                           if (lbnr > 99) {
+                               fprintf(stderr, "ERROR: Zu viele Labels (%d) in Zeile (%d)\n", lbnr, a);
+                               errstate = 1;
+                           }
+                        }
                      }
-                     // vorspulen bis zum ersten "Nicht-Leerzeichen hinter der Zeilennummer"
-                     cp = line;
-                     while ((isWspace(*cp) == 0) && *cp != '\0') cp++;
-                     while (isWspace(*cp) && *cp != '\0') cp++;
                   }
-                  
-                  if (statflag_verbose_mode)
-                       fprintf (stderr, "code line after adress >%s<\n", cp);
-                  a++;
-                  code = get_cmd_cde(cp);
-                  if (statflag_verbose_mode)
-                     fprintf (stderr, "Command >%s< translated into code = %d\n", cp, code);
+               }
+               a++;
+            }
+         }
 
-                  i++;
+         a = startadr;
 
-                  if (!needs_adress(code)) {
-                     i++;
-                     adresse = 0;
-                  } else {
-                     // Adresse Lesen
-                     while (*cp != '\0') cp++;
-                     cp--;
-                     while ((isWspace(*cp) == 0)) cp--;
-                     // Boris6 hat eine enge formatierung des Ix
-                     if (statflag_boris4_mode == 6 && *(++cp) == 'I') {
-                        cp+=2;
-                        code += 128;
+         if (errstate == 0) {
+            rewind (file_in);
+            // printf("%c%c", 170, 83);
+            while (fgets(s, 255, file_in) != NULL) {
+               if (!is_comment(line)) {
+                  clean_code_line(line);
+                  if (statflag_verbose_mode)
+                       fprintf (stderr, "cleaned code line >%s<\n", line);
+
+                  if (strlen(line) > 0) {
+                     if (isWspace (line[0])){
+                        // wir haben vorn keine Zeilennummer
+                        // i = sscanf(s, "%[^@]@%d", kdo, &adresse);
+                        zeile = 0;
+                        // vorspulen bis zum ersten "Nicht-Leerzeichen"
+                        cp = line;
+                        while (isWspace(*cp) && *cp != '\0') cp++;
+                        i = 1;
+                     } else {
+                        // wir haben vorn eine Zeilennummer
+                        // i = sscanf(s, "%d%[^@]@%d", &zeile, kdo, &adresse);
+                        // i = sscanf(s, "%d", &zeile);
+                        zeile = translate_label(s);
+                        if (zeile >= 0) i=1;
+                        // Fehlerbehandlung bzw Markenverschiebung
+                        if (a != zeile || a == -1) {
+                            fprintf(stderr, "WARNING: Adressabweichung in Zeile %d (%d)\n", a, zeile);
+                            if (a < zeile) {
+                               while (a < zeile) {
+                                 if (errstate == 0) 
+                                    fprintf(file_out, "%c%c", 0, 0);
+                                 a++;
+                               }
+                            } else {
+                               fprintf(stderr, "ERROR: Adressabweichung in Zeile %d (%d) nicht korrigierbar\n", a, zeile);
+                               errstate = 1;
+                            }
+                        }
+                        // vorspulen bis zum ersten "Nicht-Leerzeichen hinter der Zeilennummer"
+                        cp = line;
+                        while ((isWspace(*cp) == 0) && *cp != '\0') cp++;
+                        while (isWspace(*cp) && *cp != '\0') cp++;
                      }
-                     i += sscanf(cp, "%d", &adresse);
-                  }
-
-                  if (i != 3) {
-                     fprintf(stderr, "ERROR: Parameterfehler >%s< \n", line);
-                  } else {
-                     fprintf(file_out, "%c%c", code, (char) adresse);
+                     
                      if (statflag_verbose_mode)
-                        fprintf (stderr, ".");
+                          fprintf (stderr, "code line after adress >%s<\n", cp);
+                     a++;
+                     code = get_cmd_cde(cp);
+                     
+                     if (code == 255) {
+                            fprintf(stderr, "ERROR in Zeile %d (%d) : Kommando >%s< kann nicht uebersetzt werden\n", a, zeile, cp);
+                            errstate = 1;
+                     } else {
+                        if (statflag_verbose_mode)
+                           fprintf (stderr, "Command >%s< translated into code = %d\n", cp, code);
+                        i++;
+
+                        if (!needs_adress(code)) {
+                           i++;
+                           adresse = 0;
+                        } else {
+                           // Adresse Lesen
+                           while (*cp != '\0') cp++;
+                           cp--;
+                           while ((isWspace(*cp) == 0)) cp--;
+                           // Boris6 hat eine enge formatierung des Ix
+                           if (statflag_boris4_mode == 6 && *(++cp) == 'I') {
+                              cp+=2;
+                              code += 128;
+                           }
+                           // i += sscanf(cp, "%d", &adresse);
+                           while ((isWspace(*cp) && *cp != '\0')) cp++;
+                           adresse = translate_label(cp);
+                           if (adresse >= 0) i++;
+                        }
+
+                        if (i != 3) {
+                           fprintf(stderr, "ERROR: Parameterfehler >%s< %d\n", line, i);
+                           errstate = 1;
+                        } else {
+                           if (errstate == 0) 
+                              fprintf(file_out, "%c%c", code, (char) adresse);
+                           if (statflag_verbose_mode)
+                              fprintf (stderr, ".");
+                        }
+                     }
                   }
                }
             }
-         }
 
-         // END Marke schreiben
-         if (statflag_boris4_mode == 6) {
-            if (a < max_prg && code != 23) {
-               fprintf(file_out, "%c%c", 23, a);
-               a++;
-            }
-         } else {
-            if (a < max_prg && code != 126) {
-               fprintf(file_out, "%c%c", 126, a);
-               a++;
-            }
-         }
-
-         if (statflag_verbose_mode)
-                  fprintf (stderr, "\n%d Zeilen\n",a-startadr);
-
-         if (statflag_fill_nop_mode) {
-            while (a < max_prg) {
-                  fprintf(file_out, "%c%c", 0, 0);
+            // END Marke schreiben
+            if (statflag_boris4_mode == 6) {
+               if (a < max_prg && code != 23) {
+                  fprintf(file_out, "%c%c", 23, a);
                   a++;
+               }
+            } else {
+               if (a < max_prg && code != 126) {
+                  fprintf(file_out, "%c%c", 126, a);
+                  a++;
+               }
             }
+
             if (statflag_verbose_mode)
-                  fprintf (stderr, "Auffuellen mit NOP bis %d\n",a);
+                     fprintf (stderr, "\n%d Zeilen\n",a-startadr);
+
+            if (statflag_fill_nop_mode) {
+               while (a < max_prg) {
+                     fprintf(file_out, "%c%c", 0, 0);
+                     a++;
+               }
+               if (statflag_verbose_mode)
+                     fprintf (stderr, "Auffuellen mit NOP bis %d\n",a);
+            }
          }
 
          fclose(file_in);
+
+         // gelesene symbolischen Labels ausgeben
+
+         if (statflag_verbose_mode && lbnr > 0) {
+            fprintf(stderr, "\nSymbolische Programmspeicher-Adressen : \n");
+            for (i=0; i<lbnr; i++) {
+               fprintf(stderr, "   L%d -> %d\n", lbl_nr[i], lbl_line[i]);
+            }
+         }
+
          if (statflag_file_output) {
             fclose(file_out);
          }
@@ -513,4 +632,3 @@ int main(int argc, char * argv[]) {
 
      return 0;
 }
-
