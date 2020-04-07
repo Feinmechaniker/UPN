@@ -1,0 +1,42 @@
+#
+# Berechnung von Mittelwert und Standardabweichung von einer Zufallszahlenreihe
+#
+# GOTO 014 - Betrechnung von Mittelwert und Streuung 
+#            Ausgabe Mittelwert in X und Streuung in Y
+#
+ 000 STO    :  4  ;  Anzahl der durchlaeufe
+     CX           ;  Initialisierung der Rechenregister
+     STO    :  0  ;  i
+     STO    :  1  ;  s1
+     STO    :  2  ;  s2
+ 005 RND          ;  Zufallszahl
+     STO+   :  1  ;  Aufaddiern
+     ENTER       
+     *            ;  x^2
+     STO+   :  2 
+     1           
+     STO+   :  0  ;  Zaehler erhoehen
+     RCL    :  0 
+     RCL    :  4  ;  Die Anzahl pruefen 
+     IF x>y :  5 
+     RCL    :  1  ;  Berechnung der Ergebnisse
+     RCL    :  0 
+     /            ;  Mittelwert
+     ENTER        ;  merken
+     ENTER       
+     *            ;  ^2
+     RCL    :  0 
+     *           
+     RCL    :  2 
+     x<->y       
+     -           
+     RCL    :  0 
+     1           
+     -           
+     /           
+     SQRT        
+     x<->y       
+     HALT        
+     GOTO   :  0 
+     END    :  0 
+# rnd_check 35 lines

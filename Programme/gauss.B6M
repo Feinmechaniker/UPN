@@ -1,0 +1,20 @@
+# Das Schuljunge-Gauss-Programm,
+# Addieren natürlicher Zahlen
+# in <7> steht die Anzahl
+# bei 100 muss 5050 rauskommen
+ 000 CX          
+     STO    :  8 
+ 002 RCL    :  7 
+     RCL    :  8 
+     +           
+     STO    :  8 
+     RCL    :  7 
+     1           
+     -           
+     STO    :  7 
+     PAUSE       
+     IF x>0 :  2 
+     RCL    :  8 
+     HALT        
+     END    :  0 
+# gauss 15 lines

@@ -1,0 +1,32 @@
+# Statisches Moment, z.B. zum Berechnen des Schwerpunktes einer Fläche aus Teilflächen
+# Verwendbar für die W&B Berechnung
+# Verwendete Speicher: 0 Flächnsumme
+#                      1 Momentsumme
+# Bedienung goto 000, Run, 
+#           Eingabeschleife: Fläche ENTER Schwerpunkt RUN
+#           Berechnung: GOSUB 015
+#           Anzeige: Schwerpunkt in x, Flächensumme in y
+# Beispiel: 100 5    100 15  -> 200 10
+ 000 CX          
+     STO    :  0 
+     STO    :  1 
+ 003 HALT        
+     x<->y       
+     ENTER       
+     RCL    :  0 
+     +           
+     STO    :  0 
+     RDN         
+     *           
+     RCL    :  1 
+     +           
+     STO    :  1 
+     GOTO   :  3 
+     RCL    :  1 
+     RCL    :  0 
+     /           
+     RCL    :  0 
+     x<->y       
+     RETURN      
+     END    :  0 
+# statisches_moment 22 lines

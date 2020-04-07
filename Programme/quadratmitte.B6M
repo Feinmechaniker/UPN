@@ -1,0 +1,63 @@
+# Programm ./quadratmitte.bor
+# Pseudozufallszahlen nach der Quadratmittenmethode
+# Verwendete Speicher: 
+# 00 Index, Nummer in der Zahlenfolge
+# 62 ArbeitsIndex, Nummer in der Zahlenfolge
+# 63 Zwischenspeicher fuer die aktuelle Zufallszahl
+#
+# Das programm nimmt den Inhalt von Rx als startwert 
+# und berechnet solange neue Pseudozufallszahlen,
+# bis eine Wiederholung auftritt
+# Angezeigt wird die Laenge der Zahlenfolge
+# Die Einzelnen Zahlen werden ab Speicher 01 abgelegt
+#
+# Ein schoenes Beispiel zur Verwendung der Indexregister
+#
+ 000 1           
+     STO    :  0  ;  Die Este Zahl kommt in die 01
+     RDN          ;  Ready to run, Zahl steht in Rx
+ 003 STO    Ix 0  ;  Abspeichern des aktuellen Wertes
+     GOSUB  : 26  ;  Neue Zufallszahl bestimmen
+     STO    : 63 
+     1           
+     STO    : 62 
+     RDN         
+ 009 RCL    :  0  ;  Anzahl gespeicherter Zahlen
+     RCL    : 62  ;  Arbeitsindex
+     IF x>y : 18  ;  Schleife zuende 
+     RCL    Ix62 
+     RCL    : 63 
+     IF x=y : 22  ;  Den wert hatten wir schon, raus
+     1           
+     STO+   : 62 
+     GOTO   :  9  ;  Schleife
+ 018 1            ;  Die Zahl hatten wir noch nicht, merken
+     STO+   :  0 
+     RCL    : 63 
+     GOTO   :  3 
+ 022 RCL    : 63 
+     RCL    :  0 
+     HALT        
+     GOTO   :  0 
+ 026 SQR          ;  Unterprogramm zur Berechnung der Quadratmitte, input in Rx, output in Rx
+     1           
+     0           
+     /           
+     INT         
+     1           
+     0           
+     0           
+     /           
+     FRAC        
+     1           
+     0           
+     0           
+     *           
+     0           
+     .           
+     1           
+     +           
+     INT         
+     RETURN      
+     END    :  0 
+# quadratmitte 47 lines

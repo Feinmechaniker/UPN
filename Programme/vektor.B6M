@@ -1,0 +1,97 @@
+# Vektorarithmetik
+# Verwendete Speicher: 
+# 3d-Vektoren als Operanden in a <1,2,3> b <4,5,6> und c <7,8,9>
+# Winkel werden in rad / grad ausgegeben (je nach Einstellung)
+#
+#
+#
+#
+#
+ 000 HALT        
+     GOTO   :  0 
+ 002 RCL    :  1  ;  Betrag vektor a <1,2,3>
+     SQR         
+     RCL    :  2 
+     SQR         
+     +           
+     RCL    :  3 
+     SQR         
+     +           
+     SQRT        
+     RETURN      
+ 012 RCL    :  1  ;  skalarprodukt a * b
+     RCL    :  4 
+     *           
+     RCL    :  2 
+     RCL    :  5 
+     *           
+     +           
+     RCL    :  3 
+     RCL    :  6 
+     *           
+     +           
+     RETURN      
+     GOSUB  :  2  ;  Winkel zwischen a und b
+     STO    : 13 
+     RCL    :  4 
+     SQR         
+     RCL    :  5 
+     SQR         
+     +           
+     RCL    :  6 
+     SQR         
+     +           
+     SQRT        
+     RCL    : 13 
+     *           
+     STO    : 13 
+     GOSUB  : 12 
+     RCL    : 13 
+     /           
+     ACOS        
+     RETURN      
+ 043 RCL    :  3  ;  kreuzprodukt a x b nach d <10, 11, 12>
+     RCL    :  5 
+     *           
+     RCL    :  2 
+     RCL    :  6 
+     *           
+     -           
+     STO    : 10 
+     RCL    :  1 
+     RCL    :  6 
+     *           
+     RCL    :  3 
+     RCL    :  4 
+     *           
+     -           
+     STO    : 11 
+     RCL    :  2 
+     RCL    :  4 
+     *           
+     RCL    :  1 
+     RCL    :  5 
+     *           
+     -           
+     STO    : 12 
+     RCL    : 11 
+     RCL    : 10 
+     RETURN      
+     GOSUB  : 43  ;  c (bxa)
+     RCL    :  7 
+     *           
+     STO    : 13 
+     RDN         
+     RCL    :  8 
+     *           
+     RCL    : 13 
+     +           
+     STO    : 13 
+     RDN         
+     RCL    :  9 
+     *           
+     RCL    : 13 
+     +           
+     RETURN      
+     END    :  0 
+# vektor 87 lines

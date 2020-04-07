@@ -1,0 +1,130 @@
+# Lösung eines lineares Gleichungssystems 3.grades
+# Programm 3x3system.bs5
+# Verwendete Speicher: 1-9 Matrix, 1-12 Vektor, 13 det
+# Bedienung: goto 000, RUN, Eingabe des Gleichungssystems (a1 enter a2 enter a3 enter y1 RUN) ...
+# Ausgabe der Lösung x1 RUN x2 RUN x3 
+# Beispiel: 1*x1 + 2*x2 +3*x3 = 14
+#           1*x1 + 3*x2 +4*x3 = 19
+#           1*x1 + 4*x2 +2*x3 = 15
+# Lösung: x1 = 1; x2 = 2; x3 = 3
+# Falls Gleichungssystem nicht lösbar (abhängige Zeilen ) - Error X
+#
+ 000 NOP          ;  Programmstart, Eingabe der Koeffizienten 
+     HALT         ;  Erste gleichung a1*x1 + a2*x2 + a3*x3 = y1
+     STO    : 10 
+     RDN         
+     STO    :  3 
+     RDN         
+     STO    :  2 
+     RDN         
+     STO    :  1 
+     HALT         ;  Zweite gleichung b1*x1 + b2*x2 + b3*x3 = y2
+     STO    : 11 
+     RDN         
+     STO    :  6 
+     RDN         
+     STO    :  5 
+     RDN         
+     STO    :  4 
+     HALT         ;  Dritte gleichung c1*x1 + c2*x2 + c3*x3 = y3
+     STO    : 12 
+     RDN         
+     STO    :  9 
+     RDN         
+     STO    :  8 
+     RDN         
+     STO    :  7 
+     GOSUB  : 87  ;  Koeffizientendeterminante berechnen
+     1/x         
+     STO    : 13  ;  Inverse Determinante merken
+     RCL    :  1  ;  Tauschen der ersten Matrixspalte mit dem Ergebnisvektor
+     RCL    : 10 
+     STO    :  1 
+     x<->y       
+     STO    : 10 
+     RCL    :  4 
+     RCL    : 11 
+     STO    :  4 
+     x<->y       
+     STO    : 11 
+     RCL    :  7 
+     RCL    : 12 
+     STO    :  7 
+     x<->y       
+     STO    : 12 
+     GOSUB  : 87  ;  Determinante nochmal berechnen
+     RCL    : 13 
+     *           
+     HALT         ;  Anzeige x1
+     RCL    :  2  ;  Tauschen der zweiten Matrixspalte mit der ersten
+     RCL    : 10 
+     STO    :  2 
+     x<->y       
+     STO    : 10 
+     RCL    :  5 
+     RCL    : 11 
+     STO    :  5 
+     x<->y       
+     STO    : 11 
+     RCL    :  8 
+     RCL    : 12 
+     STO    :  8 
+     x<->y       
+     STO    : 12 
+     GOSUB  : 87  ;  neue Determinante berechnen
+     /-/         
+     RCL    : 13 
+     *           
+     HALT         ;  Anzeige x2
+     RCL    :  3  ;  Tauschen der dritten Matrixspalte
+     RCL    : 10 
+     STO    :  3 
+     x<->y       
+     STO    : 10 
+     RCL    :  6 
+     RCL    : 11 
+     STO    :  6 
+     x<->y       
+     STO    : 11 
+     RCL    :  9 
+     RCL    : 12 
+     STO    :  9 
+     x<->y       
+     STO    : 12 
+     GOSUB  : 87 
+     RCL    : 13 
+     *           
+     HALT         ;  Anzeige x3
+     GOTO   :  0 
+ 087 RCL    :  5  ;  Unterprogramm Determinantenberechnung in den Speicher 1-9 ist die Matrix)
+     RCL    :  3 
+     *           
+     RCL    :  6 
+     RCL    :  2 
+     *           
+     -           
+     RCL    :  7 
+     *           
+     RCL    :  6 
+     RCL    :  1 
+     *           
+     RCL    :  4 
+     RCL    :  3 
+     *           
+     -           
+     RCL    :  8 
+     *           
+     +           
+     RCL    :  4 
+     RCL    :  2 
+     *           
+     RCL    :  5 
+     RCL    :  1 
+     *           
+     -           
+     RCL    :  9 
+     *           
+     +           
+     RETURN      
+     END    :  0 
+# 3x3system 118 lines

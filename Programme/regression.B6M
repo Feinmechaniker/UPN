@@ -1,0 +1,61 @@
+# Programm testsuite.bor
+# Verwendete Speicher: 5 7 8 
+ 000 3            ;  33 00
+     ENTER        ;  06 00
+     4            ;  34 00
+     *            ;  03 00
+     SQRT         ;  09 00
+     ENTER        ;  06 00
+     *            ;  03 00
+     1            ;  31 00
+     2            ;  32 00
+     -            ;  02 00
+     PAUSE        ;  41 00
+     CX           ;  0f 00
+     STO    :  8  ;  07 08
+     1            ;  31 00
+     0            ;  30 00
+     0            ;  30 00
+     STO    :  7  ;  07 07
+ 017 RCL    :  7  ;  08 07
+     STO+   :  8  ;  12 08
+     Loop 7 : 17  ;  77 11
+     RCL    :  8  ;  08 08
+     PAUSE        ;  41 00
+     grd    :  0  ;  70 00
+     3            ;  33 00
+     0            ;  30 00
+     SIN          ;  1c 00
+     PAUSE        ;  41 00
+     2            ;  32 00
+     *            ;  03 00
+     grd    :  1  ;  70 01
+     ASIN         ;  5c 00
+     2            ;  32 00
+     *            ;  03 00
+     PAUSE        ;  41 00
+     PI           ;  50 00
+     Fix    :  1  ;  45 01
+     PAUSE        ;  41 00
+     Fix    :  2  ;  45 02
+     PAUSE        ;  41 00
+     Fix    :  3  ;  45 03
+     PAUSE        ;  41 00
+     Fix    :  0  ;  45 00
+     -            ;  02 00
+     PAUSE        ;  41 00
+     GOSUB  : 52  ;  0b 34
+     PAUSE        ;  41 00
+     RCL    :  5  ;  08 05
+     -            ;  02 00
+     PAUSE        ;  41 00
+     HALT         ;  0e 00
+     STO    : 77  ;  00 00
+     RETURN       ;  00 00
+ 052 1            ;  31 00
+     2            ;  32 00
+     3            ;  33 00
+     STO    :  5  ;  07 05
+     RETURN       ;  0c 00
+     END    :  0  ;  7e 41
+# regression 58 lines

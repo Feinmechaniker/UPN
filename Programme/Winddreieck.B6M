@@ -1,0 +1,101 @@
+# Programm Winddreieck
+# ####################
+#
+# Verwendete Speicher: 
+#  0  Fluggeschwindigkeit in km/h (vorgegeben)
+#  1  Windgeschwindigkeit in Knoten (vorgegeben)
+#  2  Windrichtung lt. APIS (vorgegeben)
+#  3  Kurs laut Planung (Eingabewert in der Schleife)
+#  4  Flugstrecke in km (Eingabewert in der Schleife)
+#  5  Vorhaltewinkel
+#  6  Wind in km/h
+#  7  Umrechnung km - Knoten (entsteht)
+#
+#  Eingabe:
+#  Kartenkurs 
+#    ENTER
+#  Flugstrecke in km 
+#    RUN
+#
+#  Ausgabe: 
+ 000 Fix    :  1  ;  Umschalten auf Fixpunkt-Darstellung
+     1           
+     .           
+     8           
+     5           
+     1           
+     9           
+     STO    :  7 
+     RCL    :  1 
+     *           
+     STO    :  6 
+     RCL    :  0 
+     -           
+     IF x>0 : 68 
+     CX          
+ 015 HALT         ;  Eingabeschleife, Kartenkurs ENTER Strecke RUN
+     STO    :  4 
+     x<->y       
+     STO    :  3 
+     RCL    :  2  ;  Kurs-Eingabe gegen Windrichtung pruefen
+     -           
+     IF x=0 : 72  ;  Genau in Windrichtung, wir addieren eine kleine Abweichung damit wir rechnen koennen 
+     RCL    :  3 
+     1           
+     8           
+     0           
+     -           
+     RCL    :  2 
+     -           
+     IF x=0 : 72  ;  Genau in Windrichtung, wir addieren eine kleine Abweichung damit wir rechnen koennen 
+     3           
+     6           
+     0           
+     +           
+     IF x=0 : 72  ;  Genau in Windrichtung, wir addieren eine kleine Abweichung damit wir rechnen koennen 
+ 035 RCL    :  3  ;  Hier beginnt die Berechnung
+     RCL    :  2 
+     x<->y       
+     -           
+     ENTER       
+     ENTER       
+     SIN         
+     RCL    :  6 
+     *           
+     RCL    :  0 
+     /           
+     ASIN        
+     STO    :  5 
+     -           
+     SIN         
+     x<->y       
+     SIN         
+     /           
+     RCL    :  0 
+     *           
+     RCL    :  3 
+     RCL    :  5 
+     +           
+     x<->y       
+     RCL    :  4 
+     x<->y       
+     /           
+     6           
+     0           
+     *           
+     x<->y       
+     GOTO   : 15  ;  Anzeige der Ergebnisse x = KURS, y = Flugzeit in min
+     NOP         
+ 068 CX           ;  Fehleranzeige (Div / 0) 
+     /           
+     HALT        
+     GOTO   :  0 
+ 072 0            ;  Genau in Windrichtung, wir addieren eine kleine Abweichung damit wir rechnen koennen 
+     .           
+     0           
+     0           
+     1           
+     STO+   :  3 
+     GOTO   : 35 
+     END    :  0 
+# Winddreieck 80 lines

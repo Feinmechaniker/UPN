@@ -1,0 +1,61 @@
+# Wellendimensionierung aus Mt und Mb
+# Programm: welle.bs5
+# Speicher: 
+#   0 Sbf in MPa (370 für St50)
+#   1 cs (stossfaktor i.a. 1.5)
+#   2 s  (Sicherheit i.a. 3...5...6)
+#
+# Bedienung: GOTO 000, RUN
+#    Eingabe Mt in Nm ENTER Mb in Nm RUN
+#    Ausgabe Wellendurchmesser in mm
+#
+# Beispiel: 20 Nm Enter Nm Run -> 15.6 mm
+#
+ 000 3           
+     7           
+     0           
+     STO    :  0 
+     CX          
+     1           
+     .           
+     5           
+     STO    :  1 
+     CX          
+     5           
+     STO    :  2 
+ 012 HALT        
+     RCL    :  1 
+     *           
+     SQR         
+     x<->y       
+     RCL    :  1 
+     *           
+     SQR         
+     3           
+     *           
+     4           
+     /           
+     +           
+     SQRT        
+     3           
+     2           
+     *           
+     PI          
+     /           
+     RCL    :  0 
+     /           
+     3           
+     ENTER       
+     1           
+     0           
+     x^y         
+     *           
+     RCL    :  2 
+     *           
+     3           
+     1/x         
+     x<->y       
+     x^y         
+     GOTO   : 12 
+     END    :  0 
+# welle 47 lines

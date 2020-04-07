@@ -1,0 +1,67 @@
+# Suche nach Nullstellen einer Funktion in einem Intervall
+# Programm nullstellen.bs5
+# Verwendete Speicher: 
+# 2..8 Rechenspeicher
+# 4: Linke Intervallgrenze ; Vor Programmstart belegen
+# 5: Rechte Intervallgrenze ; Vor Programmstart belegen
+# Funktion als Unterprogramm ab 050
+# Rechte und Linke Intervallgrenze in speicher 4,5 vorgeben, dann Programmstart bei 000,
+# Ausgabe Verbessertes Intervall oder ERROR x
+#
+ 000 HALT        
+     9            ;  Anzahl der Intervalle im Bereich
+     STO    :  7  ;  Zum steuern der inneren loop
+     STO    :  8  ;  zum steuern der auesseren Loop
+ 004 RCL    :  5  ;  Programmstart auessere Loop
+     RCL    :  4 
+     -           
+     9           
+     /           
+     NOP         
+     STO    :  3  ;  Intervallbreite
+     RCL    :  4 
+     GOSUB  : 50 
+     STO    :  2  ;  Funktionswert der linken Intervallgrenze
+     RCL    :  4 
+ 015 RCL    :  3  ;  innere Loop
+     +           
+     GOSUB  : 50 
+     RCL    :  2 
+     *           
+     IF x<0 : 30  ;  Einer der Funktionswerte war negativ, Im Intervall liegt eine Nullstelle
+     IF x=0 : 30  ;  Einer der Funktionswerte war 0
+     RCL    :  4 
+     RCL    :  3 
+     +           
+     STO    :  4  ;  neue Rechte Intervallgrenze
+     Loop 7 : 15 
+ 027 CX          
+     /            ;  Error anzeigen
+     GOTO   :  0 
+ 030 9            ;  Wir haben im Intervall eine Nullstelle! - Weiter verfeinern
+     STO    :  7 
+     RCL    :  4 
+     RCL    :  3 
+     +           
+     STO    :  5  ;  Das ist die Verfeinerte rechte Intervallgrenze
+     Loop 8 :  4 
+     GOSUB  : 50  ;  wir haben uns durchgeloopt und durchverfeinert. Haben wir nun was gefunden?
+     RCL    :  2 
+     *           
+     IF x>0 : 27 
+     RCL    :  4 
+     RCL    :  5 
+     GOTO   :  0 
+     NOP         
+     NOP         
+     NOP         
+     NOP         
+     NOP         
+     NOP         
+ 050 ENTER        ;  Unterprogramm für die Funktion, Beispiel x^2-1
+     *           
+     1           
+     -           
+     RETURN      
+     END    :  0 
+# nullstellen 56 lines

@@ -1,0 +1,50 @@
+# zentrales ebenes Kraftsystem, Addition von an einem Punkt angreifenden Kräften
+# Verwendete Speicher: 0..2
+# Bedienung: GOTO 000, RUN, Eingabeschleife Kraftbetrag ENTER Winkel RUN
+#                      Endekennzeichen 0 ENTER 0 RUN
+#                      Ausgabe: Kraftsumme in x, Winkel in y
+#                      Kraftkomponenten in <1> und <2>
+# Beispiel: 100, 30 RUN 50, 45 RUN 0, 0 -> 148.85 , 34.99
+#
+ 000 CX          
+     STO    :  1 
+     STO    :  2 
+ 003 HALT        
+     SIN         
+     LSTx        
+     COS         
+     RDN         
+     RDN         
+     IF x=0 : 25 
+     STO    :  0 
+     RDN         
+     RDN         
+     RCL    :  0 
+     *           
+     RCL    :  1 
+     +           
+     STO    :  1 
+     RDN         
+     RCL    :  0 
+     *           
+     RCL    :  2 
+     +           
+     STO    :  2 
+     GOTO   :  3 
+ 025 RCL    :  1 
+     ENTER       
+     *           
+     RCL    :  2 
+     ENTER       
+     *           
+     +           
+     SQRT        
+     RCL    :  2 
+     RCL    :  1 
+     /           
+     ATAN        
+     x<->y       
+     HALT        
+     GOTO   :  0 
+     END    :  0 
+# ebenes_kraftsystem 41 lines

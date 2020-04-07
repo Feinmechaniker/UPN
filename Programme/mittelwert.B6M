@@ -1,0 +1,41 @@
+#
+#  Aufnahme von Messwerten in einer Eingabeschleife
+#
+# GOTO 014 - Betrechnung von Mittelwert und Streuung 
+#            Ausgabe Mittelwert in X und Streuung in Y
+#
+ 000 CX           ;  Initialisierung der Rechenregister
+     STO    :  0  ;  i
+     STO    :  1  ;  s1
+     STO    :  2  ;  s2
+ 004 HALT         ;  Eingabe des Wertes nach x, weiter mit RUN
+     STO+   :  1  ;  Aufaddiern
+     ENTER       
+     *            ;  x^2
+     STO+   :  2 
+     1           
+     STO+   :  0  ;  Zaehler erhoehen
+     RDN         
+     RDN         
+     GOTO   :  4 
+     RCL    :  1  ;  Berechnung der Ergebnisse
+     RCL    :  0 
+     /            ;  Mittelwert
+     ENTER        ;  merken
+     ENTER       
+     *            ;  ^2
+     RCL    :  0 
+     *           
+     RCL    :  2 
+     x<->y       
+     -           
+     RCL    :  0 
+     1           
+     -           
+     /           
+     SQRT        
+     x<->y       
+     HALT        
+     GOTO   :  0 
+     END    :  0 
+# mittelwert 34 lines

@@ -1,0 +1,95 @@
+# Programm lin_reg.bor
+# Lineare Regression
+# basiert auf dem Beispiel bei Gilde/Altrichter
+#
+# Verwendete Speicher: 0 1 2 3 4 5 6 7 8
+# 00 - Index, Anzahl der Wertepaare
+# 01 - Summe x
+# 02 - Summe y
+# 03 - Summe x*y
+# 04 - Summe x^2
+# 05 - Summe y^2
+# 06 - Ergebnis A
+# 07 - Ergebnis B
+# 08 - Bestimmtheitsmass 
+ 000 CX           ;  Initialisierung, alle Speicher loeschen
+     STO    :  0 
+     STO    :  1 
+     STO    :  2 
+     STO    :  3 
+     STO    :  4 
+     STO    :  5 
+ 007 HALT         ;  Eingabeschleife, X ENTER y RUN. Zum Berechnen GOSUB 026
+     STO+   :  2 
+     ENTER       
+     SQR         
+     STO+   :  5 
+     RDN         
+     x<->y       
+     STO+   :  1 
+     ENTER       
+     SQR         
+     STO+   :  4 
+     RDN         
+     *           
+     STO+   :  3 
+     RCL    :  0 
+     1           
+     +           
+     STO    :  0 
+     GOTO   :  7 
+     RCL    :  0  ;  Berechnungs-Unterprogramm
+     RCL    :  3 
+     *           
+     RCL    :  1 
+     RCL    :  2 
+     *           
+     -           
+     RCL    :  0 
+     RCL    :  4 
+     *           
+     RCL    :  1 
+     SQR         
+     -           
+     /           
+     ENTER       
+     RCL    :  1 
+     *           
+     RCL    :  2 
+     x<->y       
+     -           
+     RCL    :  0 
+     /           
+     STO    :  7 
+     x<->y       
+     STO    :  6 
+     RCL    :  3 
+     RCL    :  1 
+     RCL    :  2 
+     *           
+     RCL    :  0 
+     /           
+     -           
+     SQR         
+     STO    :  8  ;  Zaehler erst mal zwischenspeichern
+     RCL    :  4 
+     RCL    :  1 
+     SQR         
+     RCL    :  0 
+     /           
+     -           
+     RCL    :  5 
+     RCL    :  2 
+     SQR         
+     RCL    :  0 
+     /           
+     -           
+     *           
+     RCL    :  8 
+     x<->y       
+     /           
+     RCL    :  6  ;  A
+     RCL    :  7  ;  B
+     RETURN      
+     END    :  0 
+# lin_reg1 80 lines

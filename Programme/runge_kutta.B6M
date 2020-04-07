@@ -1,0 +1,95 @@
+# Numerische Lösung eines Anfangswertproblems einer Differentialgleichung
+# Programm runge_kutta.bs5
+# Verwendete Speicher: 
+#            2: linke Grenze 
+#            3: rechte Grenze 
+#            4: x0 (Startwert)
+#            5: y0 (Startwert)
+#            6: x (Parameter für Funktionsaufruf)
+#            7: y (Parameter für Funktionsaufruf)
+#            8: Schrittanzahl - vorgegeben (5)
+#            9: Intervallbreite h
+#            10: halbe Intervallbreite
+#            12: Zwischenspeicher zum Aufsummieren der k1-k4
+#
+# y' = f(x,y) Als Unterprogramm ab 065, 
+#
+# Beispiel y' = y-2x/y mit y(0) = 1 im Intervall 0...2
+# -> 0.4 1.3420    0.8 1.6134   1.2 1.846   1.6 2.0536   2.0 2.2448
+#
+ 000 5            ;  Schrittzahl ueber das Gesamtintervall
+     STO    :  8 
+     HALT         ;  Eingabe Intervallgrenzen
+     STO    :  3  ;  rechte Intervallgrenze
+     x<->y       
+     STO    :  2  ;  linke Intervallgrenze
+     -           
+     RCL    :  8 
+     /            ;  Intervallbreite
+     STO    :  9 
+     2           
+     /           
+     STO    : 10 
+     HALT         ;  Eingabe Startwerte x0 y0
+     STO    :  5  ;  y0 - Startwert
+     x<->y       
+     STO    :  4  ;  x0 - Startwert
+ 017 RCL    :  4  ;  x- und y- Werte in die Parameterspeicher ablegen
+     STO    :  6 
+     RCL    :  5 
+     STO    :  7 
+     GOSUB  : 65  ;  f(x0,y0) = k1
+     STO    : 12  ;  Aufsummiern der kx
+     RCL    : 10 
+     *           
+     STO+   :  7 
+     RCL    : 10 
+     STO+   :  6 
+     GOSUB  : 65  ;  f(x1,y1) = k2
+     STO+   : 12 
+     STO+   : 12  ;  2*k2
+     RCL    : 10 
+     *           
+     RCL    :  5 
+     +           
+     STO    :  7 
+     GOSUB  : 65  ;  f(x2,y2) = k3
+     STO+   : 12 
+     STO+   : 12  ;  2*k2
+     RCL    :  9 
+     *           
+     RCL    :  5 
+     +           
+     STO    :  7 
+     RCL    : 10 
+     STO+   :  6 
+     GOSUB  : 65  ;  f(x3,y3) = k4
+     STO+   : 12 
+     RCL    : 12 
+     6           
+     /           
+     RCL    :  9 
+     *           
+     RCL    :  5 
+     +            ;  der neue y - wert
+     STO    :  5 
+     RCL    :  6 
+     STO    :  4 
+     HALT         ;  Anzeige des iterierten Werte xi und yi
+     Loop 8 : 17 
+     GOTO   :  0 
+     NOP         
+     NOP         
+     NOP         
+     NOP         
+ 065 RCL    :  6  ;  Unterprogramm der Funktion y' = f(x,y) wobei x in 6 und y in 7
+     2           
+     *           
+     RCL    :  7 
+     /           
+     RCL    :  7 
+     x<->y       
+     -           
+     RETURN       ;  f(x,y) im x-Register
+     END    :  0 
+# runge_kutta 75 lines

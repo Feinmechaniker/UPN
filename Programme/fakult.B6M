@@ -1,0 +1,60 @@
+# Die Gamma - Funktion zur Berechnung der Fakultaet
+# Programm fakultaet.bor
+# Verwendete Speicher: 
+# 0 1 Rechenspeicher
+# Programmstart bei 000
+# dann (bei 006) x eingeben, RUN
+# Anzeige bei x <= 69 Anzeige der Fakultaet
+#             x > 69 Mantisse der Fakultaet in X und exponent in y
+ 000 PI           ;  Konstanten vorbelegen
+     2           
+     *           
+     SQRT        
+     LN          
+     STO    :  1 
+ 006 HALT         ;  Eingabeschleife
+     STO    :  0 
+     0           
+     .           
+     5           
+     +           
+     RCL    :  0 
+     LN          
+     *           
+     RCL    :  0 
+     -           
+     RCL    :  0 
+     1           
+     2           
+     *           
+     1/x         
+     +           
+     RCL    :  1 
+     +           
+     STO    :  0 
+     2           
+     3           
+     0           
+     -           
+     IF x<0 : 43  ;  Entscheidung Ausgabemodus - direkt
+     RCL    :  0  ;  Anzeige Exponent / Mantisse
+     1           
+     0           
+     LN          
+     /           
+     INT         
+     LSTx        
+     FRAC        
+     1           
+     0           
+     x^y         
+     GOTO   :  6 
+ 043 RCL    :  0  ;  Normale Anzeige 
+     e^X         
+     INT         
+     ENTER        ;  Y-Register frei machen
+     CX          
+     x<->y       
+     GOTO   :  6 
+     END    :  0 
+# fakult 51 lines

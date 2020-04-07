@@ -1,0 +1,103 @@
+# Das unvermeidliche Mondlandeprogramm
+# Programm: mondland.bs5
+# Speicher: 6	Hoehe	
+#           7	Geschwindigkeit	
+#           8	Kraftstoff
+#           9	Beschleunigung	
+# Bedienung: Start bei 000 oder 005, RUN, 
+# es wird geschwindigkeit.hoehe in y sowie der Kraftstoff in x angezeigt
+# Eingabe der Kraftstoffmenge RUN.
+# Wenn sanft gelandet wurde erscheint die Landegeschwindigkeit, sonst ERROR
+#
+ 000 1            ;  Programmstart 1 (einfach)
+     2           
+     0           
+     STO    :  8  ;  Start 1 mit 120 Einheiten Kraftstoff
+     GOTO   :  8 
+     6            ;  Programmstart 2 (schwierig)
+     0           
+     STO    :  8 
+ 008 5            ;  Weitere Variablenvorbelegung
+     0           
+     0           
+     STO    :  6  ;  Ausgangshoehe 500
+     5           
+     0           
+     /-/         
+     STO    :  7  ;  Ausgangsgeschwindigkeit 50
+ 016 RCL    :  6  ;  Hier beginnt die Flugschleife
+     INT         
+     4            ;  10^4
+     ENTER       
+     1           
+     0           
+     x^y         
+     /           
+     RCL    :  7 
+     ABS         
+     +           
+     RCL    :  7 
+     IF x>0 : 86 
+ 029 x<->y       
+     /-/         
+     PAUSE        ;  Anzeige von Hoehe und Geschwindigkeit
+     RCL    :  8 
+     PAUSE       
+     PAUSE       
+     CX          
+     HALT         ;  EIngabe STeuerung Kraftstoffverwendung
+     RCL    :  8 
+     x<->y       
+     IF x>y : 67 
+     STO-   :  8 
+     2           
+     *           
+     5           
+     -           
+     STO    :  9 
+     2           
+     /           
+     RCL    :  6 
+     +           
+     RCL    :  7 
+     +           
+     RCL    :  9 
+     STO+   :  7 
+     RDN         
+     STO    :  6 
+     INT         
+     IF x>0 : 16 
+ 058 2            ;  aufsetzen max mit Geschwindigkeit 2
+     /-/         
+     RCL    :  7 
+     IF x<y : 64  ;  Absturz!
+     HALT         ;  Anzeige Landegeschwindigkeit
+     GOTO   :  0 
+ 064 CX          
+     /            ;  Anzeige Error - Absturz
+     GOTO   :  0 
+ 067 RCL    :  8 
+     2           
+     .           
+     5           
+     -           
+     STO+   :  6 
+     2           
+     *           
+     STO+   :  7 
+     RCL    :  6 
+     1           
+     0           
+     *           
+     RCL    :  7 
+     SQR         
+     +           
+     SQRT        
+     /-/         
+     GOTO   : 58 
+ 086 x<->y       
+     /-/         
+     x<->y       
+     GOTO   : 29 
+     END    :  0 
+# mondland 91 lines
