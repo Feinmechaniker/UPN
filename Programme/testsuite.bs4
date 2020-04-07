@@ -1,0 +1,76 @@
+# Programm testsuite.bor
+# Ein paar Funktionstests
+# Verwendete Speicher: 5 7 8 
+#
+000 3           ; 33 00 / Wurzel aus 12, Fehlergroesse, sollte ~ 1.77 E-15 sein
+    ENTER       ; 06 00
+    4           ; 34 00
+    *           ; 03 00
+    SQRT        ; 09 00
+    ENTER       ; 06 00
+    *           ; 03 00
+    1           ; 31 00
+    2           ; 32 00
+    -           ; 02 00
+    HALT       ; 41 00
+    CX          ; 0f 00 ; Gauss Programm, ergebnis natuerlich 5050
+    STO 8       ; 07 08
+    1           ; 31 00
+    0           ; 30 00
+    0           ; 30 00
+    STO 7       ; 07 07
+017 RCL 7       ; 08 07
+    RCL 8       ; 08 08
+    +           ; 01 00
+    STO 8       ; 07 08
+    RCL 7       ; 08 07
+    1           ; 31 00
+    -           ; 02 00
+    STO 7       ; 07 07
+    X>0 017     ; 4a 11
+    RCL 8       ; 08 08
+    HALT
+028 GRD 0       ; 70 00 ; Ein paar Winkelfunktionen ; Anfangen in grd
+    3           ; 33 00
+    0           ; 30 00
+    SIN         ; 1c 00
+    2           ; 32 00
+    *           ; 03 00 ; 2*sin30° = 1
+    GRD 1       ; 70 01 ; Bogenmass
+    ASIN        ; 5c 00 ; Arcussinus von 1 = pi/2
+    2           ; 32 00
+    *           ; 03 00
+    HALT        ; 41 00 ; muesste wieder Pi rauskommen
+    PI          ; 50 00 : Das richtige Pi
+    FIX 1       ; 45 01 ; Durchschalten durch die Anzeigemodi
+    HALT       ; 41 00
+    FIX 2       ; 45 02
+    HALT       ; 41 00
+    FIX 3       ; 45 03
+    HALT       ; 41 00
+    FIX 4       ; 45 00
+    HALT       ; 41 00
+    FIX 0       ; 45 00
+    -           ; 02 00 ; Jetzt sollten wir ungefaehr 0 haben, etwa 29 E-9 recht auch :-)
+    HALT       ; 41 00
+    GOSUB 65    ; 0b 3c ; Ein Unterprogramm
+    HALT
+    RCL 5       ; 08 05 ; DAs Unterprogramm hatte hier eine 123 in <5> geschrieben
+    -           ; 02 00
+    HALT       ; 41 00 ; die Zahl war auch in x, so haben wir hier wieder eine 0
+    1
+    e^X        ; e = 2.7182818284
+    sto 9
+    halt
+#   Fehlertests
+    RETURN         ; 00 00 ; Wir sind in stackebene 0
+    HALT
+    NOP
+    NOP
+    GOTO 000
+065 1           ; 31 00
+    2           ; 32 00
+    3           ; 33 00
+    STO 5       ; 07 05
+    RETURN      ; 0c 00
+    END 70

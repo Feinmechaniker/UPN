@@ -1,0 +1,94 @@
+# Programm lin_reg.bor
+# Lineare Regression
+# basiert auf dem Beispiel bei Gilde/Altrichter
+#
+# Verwendete Speicher: 0 1 2 3 4 5 6 7 8
+# 00 - Index, Anzahl der Wertepaare
+# 01 - Summe x
+# 02 - Summe y
+# 03 - Summe x*y
+# 04 - Summe x^2
+# 05 - Summe y^2
+# 06 - Ergebnis A
+# 07 - Ergebnis B
+# 08 - Bestimmtheitsmass 
+     CX          ; 0f 00
+     STO 0       ; 07 00
+     STO 1       ; 07 01
+     STO 2       ; 07 02
+     STO 3       ; 07 03
+     STO 4       ; 07 04
+     STO 5       ; 07 05
+ 007 HALT        ; 0e 00
+     STO+ 2      ; 12 02
+     ENTER       ; 06 00
+     SQR         ; 49 00
+     STO+ 5      ; 12 05
+     RDN         ; 46 00
+     X<->Y       ; 11 00
+     STO+ 1      ; 12 01
+     ENTER       ; 06 00
+     SQR         ; 49 00
+     STO+ 4      ; 12 04
+     RDN         ; 46 00
+     *           ; 03 00
+     STO+ 3      ; 12 03
+     RCL 0       ; 08 00
+     1           ; 31 00
+     +           ; 01 00
+     STO 0       ; 07 00
+     GOTO 7      ; 0a 07
+     RCL 0       ; 08 00
+     RCL 3       ; 08 03
+     *           ; 03 00
+     RCL 1       ; 08 01
+     RCL 2       ; 08 02
+     *           ; 03 00
+     -           ; 02 00
+     RCL 0       ; 08 00
+     RCL 4       ; 08 04
+     *           ; 03 00
+     RCL 1       ; 08 01
+     SQR         ; 49 00
+     -           ; 02 00
+     /           ; 04 00
+     ENTER       ; 06 00
+     RCL 1       ; 08 01
+     *           ; 03 00
+     RCL 2       ; 08 02
+     X<->Y       ; 11 00
+     -           ; 02 00
+     RCL 0       ; 08 00
+     /           ; 04 00
+     STO 7       ; 07 07
+     X<->Y       ; 11 00
+     STO 6       ; 07 06
+     RCL 3       ; 08 03
+     RCL 1       ; 08 01
+     RCL 2       ; 08 02
+     *           ; 03 00
+     RCL 0       ; 08 00
+     /           ; 04 00
+     -           ; 02 00
+     SQR         ; 49 00
+     STO 8       ; 07 08
+     RCL 4       ; 08 04
+     RCL 1       ; 08 01
+     SQR         ; 49 00
+     RCL 0       ; 08 00
+     /           ; 04 00
+     -           ; 02 00
+     RCL 5       ; 08 05
+     RCL 2       ; 08 02
+     SQR         ; 49 00
+     RCL 0       ; 08 00
+     /           ; 04 00
+     -           ; 02 00
+     *           ; 03 00
+     RCL 8       ; 08 08
+     X<->Y       ; 11 00
+     /           ; 04 00
+     RCL 6       ; 08 06
+     RCL 7       ; 08 07
+     RETURN      ; 0c 00
+ 079 END 79      ; 7e 4f

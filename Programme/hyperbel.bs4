@@ -1,0 +1,80 @@
+#
+#  Hyperbel- und Areafunktionen 
+#  x-wert im x-Register, ergebnis im x-Register
+# 
+#  Aufruf mit GOSUB aa
+#
+00  ENTER ; sinh(x)
+    E^X
+    X<->Y
+    CHS
+    E^X
+    -
+    2
+    /
+    RETURN
+    NOP ; Damit wir auf runde Adressen kommen
+10  ENTER ; cosh(x)
+    E^X
+    X<->Y
+    CHS
+    E^X
+    +
+    2
+    /
+    RETURN
+    NOP ; Damit wir auf runde Adressen kommen
+20  ENTER ; tanh(x)
+    GOSUB 00 
+    X<->Y
+    GOSUB 10 
+    /
+    RETURN
+    NOP ; Damit wir auf runde Adressen kommen
+    NOP ; 
+    NOP ; 
+    NOP ; 
+30  ENTER ; arsinh(x)
+    SQR
+    1
+    +
+    SQRT
+    +
+    LN
+    RETURN
+    NOP ; Damit wir auf runde Adressen kommen
+    NOP ; 
+40  ENTER ; arcosh(x) - benoetigt Speicher 0, zwei Ergebnisse in x und y
+    ENTER
+    SQR
+    1
+    -
+    SQRT
+    STO 00
+    +
+    LN
+    X<->Y
+    RCL 00
+    -
+    LN
+    RETURN
+    NOP ; Damit wir auf runde Adressen kommen
+    NOP ; 
+    NOP ; 
+    NOP ; 
+    NOP ; 
+    NOP ; 
+60  ENTER ; artanh(x)
+    1
+    +
+    X<->Y
+    1
+    X<->Y
+    -
+    /
+    LN
+    2
+    /
+    RETURN
+72  END 72 
+
